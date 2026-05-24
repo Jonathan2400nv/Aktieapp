@@ -95,3 +95,10 @@ class TestGetSignal:
             ma20=self._series(110.0),
             ma50=self._series(100.0),
         ) == "Neutral"
+
+    def test_returns_none_when_rsi_is_nan(self):
+        import math
+        rsi = self._series(float('nan'))
+        ma20 = self._series(110.0)
+        ma50 = self._series(100.0)
+        assert get_signal(rsi=rsi, ma20=ma20, ma50=ma50) is None

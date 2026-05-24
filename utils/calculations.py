@@ -20,10 +20,12 @@ def detect_volume_spike(volume: pd.Series, multiplier: float = 1.5) -> pd.Series
     return (volume > avg_volume * multiplier).astype(bool)
 
 
-def get_signal(rsi: pd.Series, ma20: pd.Series, ma50: pd.Series) -> str:
+def get_signal(rsi: pd.Series, ma20: pd.Series, ma50: pd.Series) -> str | None:
     last_rsi = rsi.iloc[-1]
     last_ma20 = ma20.iloc[-1]
     last_ma50 = ma50.iloc[-1]
+    if pd.isna(last_rsi) or pd.isna(last_ma20) or pd.isna(last_ma50):
+        return None
     if last_rsi < 50 and last_ma20 > last_ma50:
         return "Bullish"
     if last_rsi > 50 and last_ma20 < last_ma50:
