@@ -24,14 +24,16 @@ def get_reddit_summary(posts: list[dict]) -> str | None:
         )
         message = client.messages.create(
             model=_MODEL,
-            max_tokens=600,
+            max_tokens=900,
             messages=[{
                 "role": "user",
                 "content": (
-                    "Her er de mest populære posts fra r/wallstreetbets og r/stocks:\n\n"
+                    "Her er de mest populære posts fra r/wallstreetbets og r/stocks lige nu:\n\n"
                     f"{titles}\n\n"
-                    "Lav et kort resumé på dansk (3-5 sætninger) af de vigtigste tendenser "
-                    "og stemninger i markedet baseret på disse posts."
+                    "Analyser disse posts og svar på dansk med følgende struktur:\n\n"
+                    "**Generel stemning:** (bullish/bearish/blandet og hvorfor)\n\n"
+                    "**Hvad er optimistisk:** (hvilke aktier, sektorer eller tendenser er folk positive omkring)\n\n"
+                    "**Investeringsanbefaling:** (baseret på stemningen — hvad bør man holde øje med eller overveje)"
                 ),
             }],
         )
