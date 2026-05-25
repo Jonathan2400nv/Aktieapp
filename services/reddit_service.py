@@ -32,6 +32,7 @@ def fetch_hot_posts(
                     "score": d["score"],
                     "comments": d["num_comments"],
                     "subreddit": d["subreddit"],
+                    "link": f"https://reddit.com{d['permalink']}",
                 })
         return posts
     except Exception:

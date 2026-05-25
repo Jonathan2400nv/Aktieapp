@@ -17,10 +17,11 @@ def render() -> None:
         )
         return
 
-    df = pd.DataFrame(posts)[['title', 'beskrivelse', 'score', 'comments', 'subreddit']]
-    df.columns = ['Titel', 'Beskrivelse', 'Score', 'Kommentarer', 'Subreddit']
+    df = pd.DataFrame(posts)[['title', 'beskrivelse', 'score', 'comments', 'subreddit', 'link']]
+    df.columns = ['Titel', 'Beskrivelse', 'Score', 'Kommentarer', 'Subreddit', 'Link']
     st.dataframe(df, use_container_width=True, column_config={
         "Beskrivelse": st.column_config.TextColumn(width="large"),
+        "Link": st.column_config.LinkColumn(display_text="Åbn"),
     })
 
     st.subheader("AI-resumé (Claude Haiku)")
