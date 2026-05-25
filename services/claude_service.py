@@ -12,7 +12,10 @@ def get_reddit_summary(posts: list[dict]) -> str | None:
     if not posts:
         return None
 
-    api_key = st.secrets.get("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
+    try:
+        api_key = st.secrets.get("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
+    except Exception:
+        api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         return None
 
