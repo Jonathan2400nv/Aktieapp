@@ -21,8 +21,14 @@ def fetch_hot_posts(
             resp.raise_for_status()
             for child in resp.json()["data"]["children"]:
                 d = child["data"]
+                text = d.get("selftext", "").strip()
+                if text in ("", "[removed]", "[deleted]"):
+                    text = "—"
+                elif len(text) > 120:
+                    text = text[:120] + "…"
                 posts.append({
                     "title": d["title"],
+                    "beskrivelse": text,
                     "score": d["score"],
                     "comments": d["num_comments"],
                     "subreddit": d["subreddit"],

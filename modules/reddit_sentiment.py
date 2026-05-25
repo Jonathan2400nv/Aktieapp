@@ -17,9 +17,11 @@ def render() -> None:
         )
         return
 
-    df = pd.DataFrame(posts)[['title', 'score', 'comments', 'subreddit']]
-    df.columns = ['Titel', 'Score', 'Kommentarer', 'Subreddit']
-    st.dataframe(df, use_container_width=True)
+    df = pd.DataFrame(posts)[['title', 'beskrivelse', 'score', 'comments', 'subreddit']]
+    df.columns = ['Titel', 'Beskrivelse', 'Score', 'Kommentarer', 'Subreddit']
+    st.dataframe(df, use_container_width=True, column_config={
+        "Beskrivelse": st.column_config.TextColumn(width="large"),
+    })
 
     st.subheader("AI-resumé (Claude Haiku)")
     with st.spinner("Genererer dansk resumé..."):
