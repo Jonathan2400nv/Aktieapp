@@ -20,6 +20,30 @@ def detect_volume_spike(volume: pd.Series, multiplier: float = 1.5) -> pd.Series
     return (volume > avg_volume * multiplier).astype(bool)
 
 
+def calculate_macd(
+    close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9
+) -> tuple[pd.Series, pd.Series, pd.Series]:
+    ema_fast = close.ewm(span=fast, adjust=False).mean()
+    ema_slow = close.ewm(span=slow, adjust=False).mean()
+    macd_line = ema_fast - ema_slow
+    signal_line = macd_line.ewm(span=signal, adjust=False).mean()
+    histogram = macd_line - signal_line
+    return macd_line, signal_line, histogram
+
+
+def calculate_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    high = df['High'].squeeze()
+    low = df['Low'].squeeze()
+    close = df['Close'].squeeze()
+    prev_close = close.shift(1)
+    tr = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    return tr.rolling(window=period).mean()
+
+
 def get_signal(rsi: pd.Series, ma20: pd.Series, ma50: pd.Series) -> str | None:
     last_rsi = rsi.iloc[-1]
     last_ma20 = ma20.iloc[-1]
