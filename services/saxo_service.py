@@ -8,7 +8,7 @@ load_dotenv()
 _SIM_BASE = "https://gateway.saxobank.com/sim/openapi"
 _AUTH_URL = "https://sim.logonvalidation.net/authorize"
 _TOKEN_URL = "https://sim.logonvalidation.net/token"
-_REDIRECT_URI = "http://localhost:8501"
+_REDIRECT_URI = os.getenv("SAXO_REDIRECT_URI", "http://localhost:8501")
 
 
 def _app_key() -> str:
