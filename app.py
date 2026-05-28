@@ -1,6 +1,6 @@
 import streamlit as st
 from components.watchlist import render_watchlist_sidebar
-from modules import swing_trading, earnings, reddit_sentiment, saxo_placeholder, ai_screener
+from modules import swing_trading, earnings, reddit_sentiment, saxo_trading, ai_screener
 
 st.set_page_config(
     page_title="Aktie App",
@@ -31,4 +31,4 @@ with tab4:
     reddit_sentiment.render()
 
 with tab5:
-    saxo_placeholder.render()
+    saxo_trading.render(watchlist)
