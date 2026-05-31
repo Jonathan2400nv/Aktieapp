@@ -51,6 +51,16 @@ def render(watchlist: list[str]) -> None:
     if not selected:
         return
 
+    with st.expander("Filtre", expanded=False):
+        f_col1, f_col2 = st.columns(2)
+        with f_col1:
+            filter_score = st.checkbox("Score ≥ 5 (KØB-kandidater)", value=False)
+            filter_adx = st.checkbox("ADX > 25 (aktier i reel trend)", value=False)
+            filter_divergence = st.checkbox("Bullish RSI-divergens", value=False)
+        with f_col2:
+            filter_squeeze = st.checkbox("Bollinger Squeeze", value=False)
+            filter_rr = st.checkbox("R:R ≥ 1.5", value=False)
+
     if st.button("Kør AI Screener", type="primary"):
         st.session_state.screener_results = {}
         progress = st.progress(0, text="Henter data...")
@@ -90,7 +100,21 @@ def render(watchlist: list[str]) -> None:
             "RSI": _fmt(d.get('rsi'), '', 1),
             "Stop-loss": _fmt(d.get('stop_loss'), '$', 2),
             "Market Cap": _market_cap_str(d.get('market_cap')),
+            "Score": d.get('signal_score', '—'),
+            "Signal": d.get('signal_label', '—'),
+            "R:R": _fmt(d.get('rr'), '', 2),
         })
+
+    if filter_score:
+        rows = [r for r in rows if results.get(r['Ticker'], {}).get('signal_score', 0) >= 5]
+    if filter_adx:
+        rows = [r for r in rows if (results.get(r['Ticker'], {}).get('adx') or 0) > 25]
+    if filter_divergence:
+        rows = [r for r in rows if results.get(r['Ticker'], {}).get('rsi_divergence_bullish', False)]
+    if filter_squeeze:
+        rows = [r for r in rows if results.get(r['Ticker'], {}).get('bollinger_squeeze', False)]
+    if filter_rr:
+        rows = [r for r in rows if (results.get(r['Ticker'], {}).get('rr') or 0) >= 1.5]
 
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
