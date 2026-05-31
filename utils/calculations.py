@@ -148,3 +148,64 @@ def detect_rsi_divergence(close: pd.Series, rsi: pd.Series, lookback: int = 20) 
         second_half_r.max() < first_half_r.max()
     )
     return {'bullish': bool(bullish), 'bearish': bool(bearish)}
+
+
+def score_signal(df: pd.DataFrame) -> dict:
+    """
+    Returns score dict: {'score': int, 'label': str, 'breakdown': dict, 'adx': float}.
+    label: 'KØB' if score >= 5, 'SÆLG' if score <= -3, else 'Neutral'.
+    """
+    close = df['Close'].squeeze()
+    volume = df['Volume'].squeeze()
+
+    ma20 = calculate_ma(close, 20)
+    ma50 = calculate_ma(close, 50)
+    rsi = calculate_rsi(close, 14)
+    macd_line, signal_line, histogram = calculate_macd(close)
+    adx_series = calculate_adx(df)
+    obv = calculate_obv(df)
+    divergence = detect_rsi_divergence(close, rsi)
+
+    last_rsi = float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else 50.0
+    last_ma20 = float(ma20.iloc[-1]) if not pd.isna(ma20.iloc[-1]) else 0.0
+    last_ma50 = float(ma50.iloc[-1]) if not pd.isna(ma50.iloc[-1]) else 0.0
+    last_close = float(close.iloc[-1])
+    last_adx = float(adx_series.iloc[-1]) if not pd.isna(adx_series.iloc[-1]) else 0.0
+    last_macd = float(macd_line.iloc[-1]) if not pd.isna(macd_line.iloc[-1]) else 0.0
+    last_signal = float(signal_line.iloc[-1]) if not pd.isna(signal_line.iloc[-1]) else 0.0
+
+    hist_rising = (
+        len(histogram) >= 2 and
+        not pd.isna(histogram.iloc[-1]) and
+        not pd.isna(histogram.iloc[-2]) and
+        float(histogram.iloc[-1]) > float(histogram.iloc[-2])
+    )
+    obv_rising = len(obv) >= 2 and float(obv.iloc[-1]) > float(obv.iloc[-2])
+    vol_spike = detect_volume_spike(volume)
+    vol_spike_up = (
+        bool(vol_spike.iloc[-1]) and
+        len(close) >= 2 and
+        last_close > float(close.iloc[-2])
+    )
+
+    breakdown = {
+        'Kurs > MA20 > MA50 (+2)': 2 if (last_close > last_ma20 > last_ma50 > 0) else 0,
+        'MACD over signal (+1)': 1 if last_macd > last_signal else 0,
+        'MACD hist stigende (+1)': 1 if hist_rising else 0,
+        'RSI 40-65 (+1)': 1 if 40 <= last_rsi <= 65 else 0,
+        'RSI < 35 oversold (+1)': 1 if last_rsi < 35 else 0,
+        'ADX > 25 (+1)': 1 if last_adx > 25 else 0,
+        'OBV stiger (+1)': 1 if obv_rising else 0,
+        'Volumen-spike op (+1)': 1 if vol_spike_up else 0,
+        'Bullish RSI-divergens (+2)': 2 if divergence['bullish'] else 0,
+    }
+
+    score = sum(breakdown.values())
+    if score >= 5:
+        label = 'KØB'
+    elif score <= -3:
+        label = 'SÆLG'
+    else:
+        label = 'Neutral'
+
+    return {'score': score, 'label': label, 'breakdown': breakdown, 'adx': last_adx}

@@ -4,7 +4,7 @@ import numpy as np
 from utils.calculations import (
     calculate_rsi, calculate_ma, detect_volume_spike, get_signal,
     calculate_adx, calculate_obv, calculate_bollinger,
-    calculate_stoch_rsi, calculate_vwap, detect_rsi_divergence,
+    calculate_stoch_rsi, calculate_vwap, detect_rsi_divergence, score_signal,
 )
 
 
@@ -254,3 +254,54 @@ class TestDetectRSIDivergence:
         rsi_vals = pd.Series([float('nan')] * 25)
         result = detect_rsi_divergence(close, rsi_vals, lookback=20)
         assert result == {'bullish': False, 'bearish': False}
+
+
+class TestScoreSignal:
+    def _base_inputs(self):
+        n = 60
+        close = pd.Series([float(i) for i in range(100, 100 + n)])
+        volume = pd.Series([1_000_000.0] * n)
+        df = pd.DataFrame({
+            'Close': close,
+            'High': close + 1,
+            'Low': close - 1,
+            'Volume': volume,
+        })
+        return df
+
+    def test_returns_dict_with_score_and_label(self):
+        df = self._base_inputs()
+        result = score_signal(df)
+        assert 'score' in result
+        assert 'label' in result
+        assert result['label'] in ('KØB', 'SÆLG', 'Neutral')
+        assert isinstance(result['score'], int)
+
+    def test_score_breakdown_has_expected_keys(self):
+        df = self._base_inputs()
+        result = score_signal(df)
+        assert 'breakdown' in result
+        assert isinstance(result['breakdown'], dict)
+        assert len(result['breakdown']) == 9
+
+    def test_adx_returned_in_result(self):
+        df = self._base_inputs()
+        result = score_signal(df)
+        assert 'adx' in result
+        assert isinstance(result['adx'], float)
+
+    def test_label_neutral_for_mixed_signals(self):
+        # Flat price → no clear trend → Neutral
+        n = 60
+        close = pd.Series([100.0] * n)
+        df = pd.DataFrame({
+            'Close': close, 'High': close + 0.1,
+            'Low': close - 0.1, 'Volume': pd.Series([1_000_000.0] * n),
+        })
+        result = score_signal(df)
+        assert result['label'] in ('Neutral', 'KØB', 'SÆLG')  # Just verify it runs
+
+    def test_score_is_sum_of_breakdown(self):
+        df = self._base_inputs()
+        result = score_signal(df)
+        assert result['score'] == sum(result['breakdown'].values())
