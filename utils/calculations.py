@@ -119,3 +119,32 @@ def calculate_vwap(df: pd.DataFrame) -> pd.Series:
     cum_tp_vol = (typical * volume).cumsum()
     cum_vol = volume.cumsum().replace(0, float('nan'))
     return cum_tp_vol / cum_vol
+
+
+def detect_rsi_divergence(close: pd.Series, rsi: pd.Series, lookback: int = 20) -> dict[str, bool]:
+    """
+    Detects RSI divergence over the last `lookback` bars.
+    Bullish: price makes lower low, RSI makes higher low.
+    Bearish: price makes higher high, RSI makes lower high.
+    """
+    if len(close) < lookback or rsi.isna().all():
+        return {'bullish': False, 'bearish': False}
+
+    price_window = close.iloc[-lookback:]
+    rsi_window = rsi.iloc[-lookback:].ffill()
+
+    mid = len(price_window) // 2
+    first_half_p = price_window.iloc[:mid]
+    second_half_p = price_window.iloc[mid:]
+    first_half_r = rsi_window.iloc[:mid]
+    second_half_r = rsi_window.iloc[mid:]
+
+    bullish = (
+        second_half_p.min() < first_half_p.min() and
+        second_half_r.min() > first_half_r.min()
+    )
+    bearish = (
+        second_half_p.max() > first_half_p.max() and
+        second_half_r.max() < first_half_r.max()
+    )
+    return {'bullish': bool(bullish), 'bearish': bool(bearish)}

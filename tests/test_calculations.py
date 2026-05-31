@@ -4,7 +4,7 @@ import numpy as np
 from utils.calculations import (
     calculate_rsi, calculate_ma, detect_volume_spike, get_signal,
     calculate_adx, calculate_obv, calculate_bollinger,
-    calculate_stoch_rsi, calculate_vwap,
+    calculate_stoch_rsi, calculate_vwap, detect_rsi_divergence,
 )
 
 
@@ -195,3 +195,16 @@ class TestCalculateVWAP:
         result = calculate_vwap(df).dropna()
         assert (result >= df['Low'].min()).all()
         assert (result <= df['High'].max()).all()
+
+
+class TestDetectRSIDivergence:
+    def test_returns_dict_with_bullish_and_bearish(self):
+        df = make_ohlcv(60)
+        close = df['Close']
+        from utils.calculations import calculate_rsi
+        rsi = calculate_rsi(close)
+        result = detect_rsi_divergence(close, rsi)
+        assert 'bullish' in result
+        assert 'bearish' in result
+        assert isinstance(result['bullish'], bool)
+        assert isinstance(result['bearish'], bool)
