@@ -1,9 +1,9 @@
 # modules/portfolio.py
 import json
+from datetime import date, timedelta
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import yfinance as yf
 from services.portfolio_service import (
     load_portfolio, save_portfolio, backfill_positions,
     scan_watchlist_for_signals, calculate_pnl,
@@ -77,6 +77,46 @@ def _build_chart(dates: list, portfolio_vals: list, spy_vals: list) -> go.Figure
     return fig
 
 
+_PERIOD_OPTIONS = {
+    "Seneste måned": 30,
+    "3 måneder": 90,
+    "6 måneder": 180,
+    "År til dato": None,  # special case
+    "Seneste år": 365,
+    "Alt": 0,  # 0 = no filter
+}
+
+
+def _filter_series(dates: list[str], pvals: list[float], svals: list[float], period_label: str) -> tuple[list[str], list[float], list[float]]:
+    if not dates:
+        return dates, pvals, svals
+    today = date.today()
+    days = _PERIOD_OPTIONS[period_label]
+    if days == 0:
+        return dates, pvals, svals
+    if days is None:  # År til dato
+        cutoff = date(today.year, 1, 1)
+    else:
+        cutoff = today - timedelta(days=days)
+    filtered = [(d, p, s) for d, p, s in zip(dates, pvals, svals) if date.fromisoformat(d) >= cutoff]
+    if not filtered:
+        return dates, pvals, svals
+    fd, fp, fs = zip(*filtered)
+    return list(fd), list(fp), list(fs)
+
+
+def _period_kpis(pvals: list[float], svals: list[float], start_capital: float) -> tuple[float, float, float]:
+    """Returns (period_return_pct, period_pnl_kr, outperformance_pp) for the filtered window."""
+    if len(pvals) < 2:
+        return 0.0, 0.0, 0.0
+    p_start, p_end = pvals[0], pvals[-1]
+    s_start, s_end = svals[0], svals[-1]
+    period_return = (p_end - p_start) / p_start if p_start else 0.0
+    spy_return = (s_end - s_start) / s_start if s_start else 0.0
+    pnl_kr = p_end - p_start
+    return period_return, pnl_kr, period_return - spy_return
+
+
 def render(watchlist: list[str]) -> None:
     st.header("📈 Modelportefølje")
     st.caption("Lanceret 01.06.2025 · 100.000 kr. startkapital · Scanner S&P 500, NASDAQ, DAX, CAC 40, FTSE 100, EURO STOXX 50 og C25")
@@ -87,7 +127,7 @@ def render(watchlist: list[str]) -> None:
 
         new_positions = _cached_scan(json.dumps(portfolio, default=str))
         if new_positions:
-                active_tickers = {p["ticker"] for p in portfolio["positions"] if p["status"] == "active"}
+            active_tickers = {p["ticker"] for p in portfolio["positions"] if p["status"] == "active"}
             for pos in new_positions:
                 if pos["ticker"] not in active_tickers:
                     portfolio["positions"].append(pos)
@@ -102,34 +142,39 @@ def render(watchlist: list[str]) -> None:
     current_prices: dict[str, float] = {}
     for pos in active:
         price = get_current_price(pos["ticker"])
-        if price:
+        if price is not None:
             current_prices[pos["ticker"]] = price
 
-    # P&L for all positions
-    all_pnl_kr = sum(
-        calculate_pnl(pos, current_prices.get(pos["ticker"], pos["entry_price"]), position_size)["pnl_kr"]
-        for pos in active
-    ) + sum(
-        calculate_pnl(pos, pos["close_price"] or pos["entry_price"], position_size)["pnl_kr"]
-        for pos in closed
-    )
-    portfolio_value = portfolio["start_capital"] + all_pnl_kr
-    total_return_pct = all_pnl_kr / portfolio["start_capital"]
-
-    # Get performance data to derive SPY return for outperformance
+    # Full performance data (all time)
     with st.spinner("Henter historisk kursdata..."):
         dates, pvals, svals = _cached_performance(json.dumps(portfolio, default=str))
 
-    # Compute SPY return from svals (derived from get_performance_data)
-    spy_return_pct = (svals[-1] / svals[0] - 1) if len(svals) >= 2 else 0.0
-    outperformance = total_return_pct - spy_return_pct
+    # --- Period selector ---
+    period_cols = st.columns(len(_PERIOD_OPTIONS))
+    if "portfolio_period" not in st.session_state:
+        st.session_state.portfolio_period = "Alt"
+    for i, label in enumerate(_PERIOD_OPTIONS):
+        if period_cols[i].button(
+            label,
+            use_container_width=True,
+            type="primary" if st.session_state.portfolio_period == label else "secondary",
+        ):
+            st.session_state.portfolio_period = label
+            st.rerun()
+
+    selected_period = st.session_state.portfolio_period
+    fdates, fpvals, fsvals = _filter_series(dates, pvals, svals, selected_period)
+
+    # KPIs for the selected period
+    period_return_pct, period_pnl_kr, outperformance = _period_kpis(fpvals, fsvals, portfolio["start_capital"])
+    portfolio_value = fpvals[-1] if fpvals else portfolio["start_capital"]
 
     # --- KPI row ---
     col1, col2, col3, col4 = st.columns(4)
     col1.metric(
-        "Samlet afkast",
-        f"{'+' if total_return_pct >= 0 else ''}{total_return_pct * 100:.1f}%",
-        f"{'+' if all_pnl_kr >= 0 else ''}{all_pnl_kr:,.0f} kr.",
+        f"Afkast ({selected_period.lower()})",
+        f"{'+' if period_return_pct >= 0 else ''}{period_return_pct * 100:.1f}%",
+        f"{'+' if period_pnl_kr >= 0 else ''}{period_pnl_kr:,.0f} kr.",
     )
     col2.metric("Porteføljeværdi", f"{portfolio_value:,.0f} kr.")
     col3.metric(
@@ -146,8 +191,8 @@ def render(watchlist: list[str]) -> None:
     st.divider()
 
     # --- Performance chart ---
-    if dates:
-        st.plotly_chart(_build_chart(dates, pvals, svals), use_container_width=True)
+    if fdates:
+        st.plotly_chart(_build_chart(fdates, fpvals, fsvals), use_container_width=True)
     else:
         st.caption("Ikke nok data til at vise performance-kurve endnu.")
 

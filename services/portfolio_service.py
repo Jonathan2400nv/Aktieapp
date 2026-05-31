@@ -81,9 +81,14 @@ def _fetch_ohlcv_for_scan(ticker: str) -> pd.DataFrame | None:
 
 
 def scan_watchlist_for_signals(watchlist: list[str], portfolio: dict) -> list[dict]:
+    max_positions = portfolio["start_capital"] // portfolio["position_size"]
     active_tickers = {p["ticker"] for p in portfolio["positions"] if p["status"] == "active"}
+    open_slots = max_positions - len(active_tickers)
+    if open_slots <= 0:
+        return []
+
     today = str(pd.Timestamp.now(tz="UTC").date())
-    new_positions = []
+    candidates = []
     for ticker in watchlist:
         if ticker in active_tickers:
             continue
@@ -94,7 +99,7 @@ def scan_watchlist_for_signals(watchlist: list[str], portfolio: dict) -> list[di
         if signal["label"] != "KØB":
             continue
         levels = calculate_trade_levels(df)
-        new_positions.append({
+        candidates.append((signal["score"], {
             "ticker": ticker,
             "source": "Portefølje-scan",
             "entry_price": levels["entry_mid"],
@@ -107,8 +112,10 @@ def scan_watchlist_for_signals(watchlist: list[str], portfolio: dict) -> list[di
             "close_price": None,
             "close_date": None,
             "close_reason": None,
-        })
-    return new_positions
+        }))
+
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    return [pos for _, pos in candidates[:open_slots]]
 
 
 def get_performance_data(portfolio: dict) -> tuple[list[str], list[float], list[float]]:
