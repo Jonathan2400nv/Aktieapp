@@ -55,3 +55,58 @@ def get_signal(rsi: pd.Series, ma20: pd.Series, ma50: pd.Series) -> str | None:
     if last_rsi > 50 and last_ma20 < last_ma50:
         return "Bearish"
     return "Neutral"
+
+
+def calculate_adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    high = df['High'].squeeze()
+    low = df['Low'].squeeze()
+    close = df['Close'].squeeze()
+
+    plus_dm = high.diff()
+    minus_dm = -low.diff()
+    plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0.0)
+    minus_dm = minus_dm.where((minus_dm > plus_dm.abs()) & (minus_dm > 0), 0.0)
+
+    atr = calculate_atr(df, period)
+    plus_di = 100 * plus_dm.ewm(alpha=1/period, adjust=False).mean() / atr
+    minus_di = 100 * minus_dm.ewm(alpha=1/period, adjust=False).mean() / atr
+
+    dx = (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, float('nan')) * 100
+    adx = dx.ewm(alpha=1/period, adjust=False).mean()
+    return adx
+
+
+def calculate_obv(df: pd.DataFrame) -> pd.Series:
+    close = df['Close'].squeeze()
+    volume = df['Volume'].squeeze()
+    direction = close.diff().apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    return (direction * volume).cumsum()
+
+
+def calculate_bollinger(close: pd.Series, period: int = 20, std_dev: float = 2.0) -> tuple[pd.Series, pd.Series]:
+    mid = close.rolling(period).mean()
+    std = close.rolling(period).std()
+    upper = mid + std_dev * std
+    lower = mid - std_dev * std
+    band_range = (upper - lower).replace(0, float('nan'))
+    pct_b = (close - lower) / band_range
+    bandwidth = band_range / mid.replace(0, float('nan'))
+    return pct_b, bandwidth
+
+
+def calculate_stoch_rsi(close: pd.Series, rsi_period: int = 14, stoch_period: int = 14, smooth_k: int = 3, smooth_d: int = 3) -> tuple[pd.Series, pd.Series]:
+    rsi = calculate_rsi(close, rsi_period)
+    rsi_min = rsi.rolling(stoch_period).min()
+    rsi_max = rsi.rolling(stoch_period).max()
+    stoch = (rsi - rsi_min) / (rsi_max - rsi_min).replace(0, float('nan'))
+    k = stoch.rolling(smooth_k).mean()
+    d = k.rolling(smooth_d).mean()
+    return k, d
+
+
+def calculate_vwap(df: pd.DataFrame) -> pd.Series:
+    typical = (df['High'].squeeze() + df['Low'].squeeze() + df['Close'].squeeze()) / 3
+    volume = df['Volume'].squeeze()
+    cum_tp_vol = (typical * volume).cumsum()
+    cum_vol = volume.cumsum().replace(0, float('nan'))
+    return cum_tp_vol / cum_vol

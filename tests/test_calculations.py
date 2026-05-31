@@ -1,6 +1,11 @@
 import pandas as pd
 import pytest
-from utils.calculations import calculate_rsi, calculate_ma, detect_volume_spike, get_signal
+import numpy as np
+from utils.calculations import (
+    calculate_rsi, calculate_ma, detect_volume_spike, get_signal,
+    calculate_adx, calculate_obv, calculate_bollinger,
+    calculate_stoch_rsi, calculate_vwap,
+)
 
 
 def make_close(values):
@@ -9,6 +14,16 @@ def make_close(values):
 
 def make_volume(values):
     return pd.Series(values, dtype=float)
+
+
+def make_ohlcv(n=60):
+    np.random.seed(42)
+    close = pd.Series(100 + np.cumsum(np.random.randn(n)), dtype=float)
+    high = close + abs(np.random.randn(n)) * 0.5
+    low = close - abs(np.random.randn(n)) * 0.5
+    volume = pd.Series(np.random.randint(1_000_000, 5_000_000, n), dtype=float)
+    df = pd.DataFrame({'High': high, 'Low': low, 'Close': close, 'Volume': volume})
+    return df
 
 
 class TestCalculateMA:
@@ -102,3 +117,81 @@ class TestGetSignal:
         ma20 = self._series(110.0)
         ma50 = self._series(100.0)
         assert get_signal(rsi=rsi, ma20=ma20, ma50=ma50) is None
+
+
+class TestCalculateADX:
+    def test_returns_series_same_length(self):
+        df = make_ohlcv()
+        result = calculate_adx(df)
+        assert len(result) == len(df)
+
+    def test_values_between_0_and_100(self):
+        df = make_ohlcv(100)
+        result = calculate_adx(df).dropna()
+        assert (result >= 0).all() and (result <= 100).all()
+
+
+class TestCalculateOBV:
+    def test_returns_series_same_length(self):
+        df = make_ohlcv()
+        result = calculate_obv(df)
+        assert len(result) == len(df)
+
+    def test_obv_increases_on_up_day(self):
+        df = pd.DataFrame({
+            'Close': [10.0, 11.0],
+            'Volume': [1000.0, 1000.0],
+            'High': [11.0, 12.0], 'Low': [9.0, 10.0],
+        })
+        result = calculate_obv(df)
+        assert result.iloc[1] > result.iloc[0]
+
+    def test_obv_decreases_on_down_day(self):
+        df = pd.DataFrame({
+            'Close': [11.0, 10.0],
+            'Volume': [1000.0, 1000.0],
+            'High': [12.0, 11.0], 'Low': [10.0, 9.0],
+        })
+        result = calculate_obv(df)
+        assert result.iloc[1] < result.iloc[0]
+
+
+class TestCalculateBollinger:
+    def test_returns_three_series(self):
+        df = make_ohlcv()
+        pct_b, bandwidth = calculate_bollinger(df['Close'])
+        assert len(pct_b) == len(df)
+        assert len(bandwidth) == len(df)
+
+    def test_pct_b_near_zero_at_lower_band(self):
+        # Flat price at lower band — %B should be near 0
+        close = pd.Series([100.0] * 19 + [90.0])
+        pct_b, _ = calculate_bollinger(close)
+        assert pct_b.iloc[-1] < 0.3
+
+
+class TestCalculateStochRSI:
+    def test_returns_k_and_d(self):
+        df = make_ohlcv(80)
+        k, d = calculate_stoch_rsi(df['Close'])
+        assert len(k) == len(df)
+        assert len(d) == len(df)
+
+    def test_k_between_0_and_1(self):
+        df = make_ohlcv(80)
+        k, _ = calculate_stoch_rsi(df['Close'])
+        valid = k.dropna()
+        assert (valid >= 0).all() and (valid <= 1).all()
+
+
+class TestCalculateVWAP:
+    def test_returns_series_same_length(self):
+        df = make_ohlcv()
+        result = calculate_vwap(df)
+        assert len(result) == len(df)
+
+    def test_vwap_between_low_and_high(self):
+        df = make_ohlcv(30)
+        result = calculate_vwap(df).dropna()
+        assert (result >= df['Low'].min()).all()
+        assert (result <= df['High'].max()).all()
