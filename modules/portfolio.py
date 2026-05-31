@@ -77,6 +77,86 @@ def _build_chart(dates: list, portfolio_vals: list, spy_vals: list) -> go.Figure
     return fig
 
 
+def _status_badge(status: str) -> str:
+    if "T1" in status:
+        bg, color = "#2a2000", "#ffc107"
+    elif "SL" in status:
+        bg, color = "#2a0000", "#f44336"
+    else:
+        bg, color = "#0a2a0a", "#4caf50"
+    return (
+        f'<span style="background:{bg};color:{color};border:1px solid {color}33;'
+        f'border-radius:4px;padding:2px 8px;font-size:11px;white-space:nowrap">{status}</span>'
+    )
+
+
+def _render_active_table(active: list, current_prices: dict, position_size: int) -> None:
+    th = "padding:10px 12px;text-align:left;color:#666;font-size:11px;font-weight:500;border-bottom:1px solid #222;white-space:nowrap"
+    td_base = "padding:10px 12px;border-bottom:1px solid #1a1a1a;font-size:13px;vertical-align:middle"
+
+    rows_html = ""
+    for pos in active:
+        current = current_prices.get(pos["ticker"], pos["entry_price"])
+        pnl = calculate_pnl(pos, current, position_size)
+        status = _status_label(pos, current)
+
+        pct = pnl["pnl_pct"]
+        kr = pnl["pnl_kr"]
+        pct_color = "#4caf50" if pct >= 0 else "#f44336"
+        pct_str = f"{'+' if pct >= 0 else ''}{pct * 100:.1f}%"
+        kr_str = f"{'+' if kr >= 0 else ''}{kr:,.0f} kr."
+
+        move = current - pos["entry_price"]
+        move_color = "#4caf50" if move >= 0 else "#f44336"
+        move_arrow = "▲" if move >= 0 else "▼"
+
+        sim_tag = ""
+        if pos.get("simulated"):
+            sim_tag = ' <span style="color:#555;font-size:10px">sim</span>'
+
+        rows_html += f"""
+        <tr>
+          <td style="{td_base}">
+            <span style="font-weight:600;color:#fff;font-size:14px">{pos['ticker']}</span>{sim_tag}
+            <div style="color:#555;font-size:10px;margin-top:2px">{pos['entry_date']}</div>
+          </td>
+          <td style="{td_base};color:#888;font-size:11px">{pos['source']}</td>
+          <td style="{td_base};color:#aaa;font-family:monospace">${pos['entry_price']:.2f}</td>
+          <td style="{td_base};font-family:monospace">
+            <span style="color:{move_color}">{move_arrow} ${current:.2f}</span>
+          </td>
+          <td style="{td_base};font-weight:600;color:{pct_color};font-family:monospace">{pct_str}</td>
+          <td style="{td_base};color:{pct_color};font-family:monospace">{kr_str}</td>
+          <td style="{td_base};color:#f44336;font-family:monospace">${pos['stop_loss']:.2f}</td>
+          <td style="{td_base};font-family:monospace">
+            <span style="color:#ffc107">${pos['t1']:.2f}</span>
+            <span style="color:#444"> / </span>
+            <span style="color:#4caf50">${pos['t2']:.2f}</span>
+          </td>
+          <td style="{td_base}">{_status_badge(status)}</td>
+        </tr>"""
+
+    html = f"""
+    <table style="width:100%;border-collapse:collapse;font-family:'Source Sans Pro',sans-serif">
+      <thead>
+        <tr>
+          <th style="{th}">Aktie</th>
+          <th style="{th}">Kilde</th>
+          <th style="{th}">Indgang</th>
+          <th style="{th}">Nuværende</th>
+          <th style="{th}">Afkast %</th>
+          <th style="{th}">Afkast kr.</th>
+          <th style="{th}">Stop-loss</th>
+          <th style="{th}">T1 / T2</th>
+          <th style="{th}">Status</th>
+        </tr>
+      </thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+    """
+    st.markdown(html, unsafe_allow_html=True)
+
+
 _PERIOD_OPTIONS = {
     "Seneste måned": 30,
     "3 måneder": 90,
@@ -227,24 +307,7 @@ Dette er **ikke professionel backtesting** — det er en indikation af strategie
     # --- Active positions ---
     if active:
         st.subheader("Aktive positioner")
-        st.caption("Aktie · Kilde · Indgang · Nuv. · Afkast% · Afkast kr. · Stop-loss · T1/T2 · Status")
-        for pos in active:
-            current = current_prices.get(pos["ticker"], pos["entry_price"])
-            pnl = calculate_pnl(pos, current, position_size)
-            status = _status_label(pos, current)
-            status_color = "green" if status == "Aktiv" else ("orange" if "T1" in status else "red")
-
-            with st.container():
-                c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns([1.5, 1.5, 1.2, 1.2, 1, 1, 1, 1, 1.2])
-                c1.write(f"**{pos['ticker']}**")
-                c2.caption(pos["source"])
-                c3.write(f"${pos['entry_price']:.2f}")
-                c4.write(f"${current:.2f}")
-                c5.write(_fmt_pct(pnl["pnl_pct"]))
-                c6.write(_fmt_kr(pnl["pnl_kr"]))
-                c7.write(f":red[${pos['stop_loss']:.2f}]")
-                c8.write(f"${pos['t1']:.2f} / ${pos['t2']:.2f}")
-                c9.write(f":{status_color}[{status}]")
+        _render_active_table(active, current_prices, position_size)
     else:
         st.info("Ingen aktive positioner endnu — scanner S&P 500, NASDAQ, DAX, CAC 40, FTSE 100, EURO STOXX 50 og C25 automatisk.")
 
