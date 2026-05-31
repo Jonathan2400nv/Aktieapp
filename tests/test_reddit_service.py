@@ -4,10 +4,11 @@ from unittest.mock import patch, MagicMock
 
 def _make_response(subreddit_name, titles=("Test post",)):
     children = [
-        {"data": {"title": t, "score": 100, "num_comments": 10, "subreddit": subreddit_name}}
+        {"data": {"title": t, "score": 100, "num_comments": 10, "subreddit": subreddit_name, "selftext": "", "permalink": f"/r/{subreddit_name}/comments/abc123/"}}
         for t in titles
     ]
     mock_resp = MagicMock()
+    mock_resp.status_code = 200
     mock_resp.json.return_value = {"data": {"children": children}}
     mock_resp.raise_for_status.return_value = None
     return mock_resp
