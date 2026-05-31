@@ -208,3 +208,49 @@ class TestDetectRSIDivergence:
         assert 'bearish' in result
         assert isinstance(result['bullish'], bool)
         assert isinstance(result['bearish'], bool)
+
+    def test_bullish_divergence_detected(self):
+        # Price: lower low in second half. RSI: higher low in second half → bullish
+        # First half: price lows around 95, RSI lows around 30
+        # Second half: price lows around 93 (lower), RSI lows around 35 (higher)
+        first_half_price = pd.Series([100.0, 95.0, 98.0, 96.0, 97.0, 95.0, 99.0, 100.0, 98.0, 97.0])
+        second_half_price = pd.Series([96.0, 93.0, 94.0, 95.0, 96.0, 93.0, 95.0, 96.0, 97.0, 96.0])
+        close = pd.concat([first_half_price, second_half_price], ignore_index=True)
+        first_half_rsi = pd.Series([50.0, 30.0, 45.0, 35.0, 40.0, 30.0, 55.0, 60.0, 50.0, 45.0])
+        second_half_rsi = pd.Series([48.0, 35.0, 40.0, 42.0, 48.0, 36.0, 45.0, 50.0, 52.0, 48.0])
+        rsi = pd.concat([first_half_rsi, second_half_rsi], ignore_index=True)
+        result = detect_rsi_divergence(close, rsi, lookback=20)
+        assert result['bullish'] is True
+        assert result['bearish'] is False
+
+    def test_bearish_divergence_detected(self):
+        # Price: higher high in second half. RSI: lower high in second half → bearish
+        first_half_price = pd.Series([100.0, 105.0, 102.0, 104.0, 103.0, 105.0, 103.0, 102.0, 101.0, 102.0])
+        second_half_price = pd.Series([103.0, 107.0, 105.0, 106.0, 107.0, 106.0, 104.0, 103.0, 104.0, 105.0])
+        close = pd.concat([first_half_price, second_half_price], ignore_index=True)
+        first_half_rsi = pd.Series([50.0, 70.0, 60.0, 65.0, 62.0, 70.0, 60.0, 55.0, 52.0, 55.0])
+        second_half_rsi = pd.Series([58.0, 65.0, 60.0, 62.0, 64.0, 62.0, 57.0, 55.0, 56.0, 58.0])
+        rsi = pd.concat([first_half_rsi, second_half_rsi], ignore_index=True)
+        result = detect_rsi_divergence(close, rsi, lookback=20)
+        assert result['bullish'] is False
+        assert result['bearish'] is True
+
+    def test_no_divergence_returns_false(self):
+        # Both price and RSI move in same direction — no divergence
+        close = pd.Series([float(i) for i in range(20)])
+        rsi_vals = pd.Series([30.0 + i for i in range(20)])
+        result = detect_rsi_divergence(close, rsi_vals, lookback=20)
+        assert result['bullish'] is False
+        assert result['bearish'] is False
+
+    def test_edge_case_insufficient_data(self):
+        close = pd.Series([100.0, 101.0, 102.0])
+        rsi_vals = pd.Series([50.0, 51.0, 52.0])
+        result = detect_rsi_divergence(close, rsi_vals, lookback=20)
+        assert result == {'bullish': False, 'bearish': False}
+
+    def test_edge_case_all_nan_rsi(self):
+        close = pd.Series([100.0] * 25)
+        rsi_vals = pd.Series([float('nan')] * 25)
+        result = detect_rsi_divergence(close, rsi_vals, lookback=20)
+        assert result == {'bullish': False, 'bearish': False}
