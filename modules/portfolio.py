@@ -6,8 +6,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from services.portfolio_service import (
     load_portfolio, save_portfolio, backfill_positions,
-    scan_watchlist_for_signals, calculate_pnl,
-    get_current_price, get_performance_data,
+    backfill_historical_signals, scan_watchlist_for_signals,
+    calculate_pnl, get_current_price, get_performance_data,
 )
 from services.market_universe import get_us_tickers, get_european_tickers
 
@@ -123,6 +123,12 @@ def render(watchlist: list[str]) -> None:
 
     with st.spinner("Opdaterer portefølje..."):
         portfolio = load_portfolio()
+
+        if not portfolio.get("historical_backfill_complete"):
+            universe = list(_cached_universe())
+            with st.spinner("Simulerer historisk performance fra 01.06.2025 (kører én gang — tager 1-2 min)..."):
+                portfolio = backfill_historical_signals(portfolio, universe)
+
         portfolio = backfill_positions(portfolio)
 
         new_positions = _cached_scan(json.dumps(portfolio, default=str))
@@ -187,6 +193,26 @@ def render(watchlist: list[str]) -> None:
         f"{len(closed)} lukkede",
         delta_color="off",
     )
+
+    # --- Disclaimer ---
+    if portfolio.get("historical_backfill_complete") and portfolio.get("backfill_date"):
+        with st.expander("ℹ️ Om den historiske performance"):
+            st.markdown(
+                f"""
+**Dele af denne performance er simuleret.**
+
+Positioner fra **01.06.2025** til **{portfolio['backfill_date']}** er rekonstrueret
+baseret på de tekniske signaler der var tilgængelige på de pågældende datoer.
+Ingen fremtidig data er brugt *(ingen look-ahead bias)*.
+
+**Forbehold:**
+- Scanningen kørte ugentligt i simuleringen — ikke dagligt som i live-drift
+- Aktiver der er udgået af indeksene siden 2025 er ikke medtaget *(survivorship bias)*
+- Indgangspris er closing-kurs på signaldagen, ikke næste dags åbningskurs
+
+Dette er **ikke professionel backtesting** — det er en indikation af strategiens historiske adfærd.
+                """
+            )
 
     st.divider()
 

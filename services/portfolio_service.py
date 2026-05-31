@@ -80,6 +80,128 @@ def _fetch_ohlcv_for_scan(ticker: str) -> pd.DataFrame | None:
         return None
 
 
+def backfill_historical_signals(portfolio: dict, universe: list[str]) -> dict:
+    """One-time simulation: walks weekly from start_date to first live scan,
+    adding KØB signals based on data available on each date (no look-ahead bias).
+    Marks all retroactively added positions with simulated=True."""
+    if portfolio.get("historical_backfill_complete"):
+        return portfolio
+
+    start_str = portfolio["start_date"]
+    max_positions = portfolio["start_capital"] // portfolio["position_size"]
+
+    real_dates = [p["entry_date"] for p in portfolio["positions"] if not p.get("simulated")]
+    cutoff_str = min(real_dates) if real_dates else str(pd.Timestamp.now(tz="UTC").date())
+
+    try:
+        all_ticker_dfs: dict[str, pd.DataFrame] = {}
+        batch_size = 100
+        for i in range(0, len(universe), batch_size):
+            batch = universe[i:i + batch_size]
+            try:
+                raw = yf.download(batch, start=start_str, end=cutoff_str,
+                                  progress=False, auto_adjust=True)
+            except Exception:
+                continue
+            if raw.empty:
+                continue
+            if isinstance(raw.columns, pd.MultiIndex):
+                for ticker in batch:
+                    try:
+                        t_df = raw.xs(ticker, axis=1, level=1).dropna(subset=["Close"])
+                        if len(t_df) >= 50:
+                            all_ticker_dfs[ticker] = t_df
+                    except KeyError:
+                        continue
+            elif len(batch) == 1:
+                raw.columns = [c[0] if isinstance(c, tuple) else c for c in raw.columns]
+                t_df = raw.dropna(subset=["Close"])
+                if len(t_df) >= 50:
+                    all_ticker_dfs[batch[0]] = t_df
+
+        if not all_ticker_dfs:
+            portfolio["historical_backfill_complete"] = True
+            portfolio["backfill_date"] = cutoff_str
+            save_portfolio(portfolio)
+            return portfolio
+
+        all_dates = sorted(set().union(*[set(df.index) for df in all_ticker_dfs.values()]))
+        simulated_positions: list[dict] = []
+
+        for i, ts in enumerate(all_dates):
+            day_str = str(ts.date())
+            if day_str >= cutoff_str:
+                break
+
+            # Daily: check SL/T2 for active simulated positions
+            for pos in simulated_positions:
+                if pos["status"] != "active":
+                    continue
+                t_df = all_ticker_dfs.get(pos["ticker"])
+                if t_df is None or ts not in t_df.index:
+                    continue
+                row = t_df.loc[ts]
+                if float(row["Low"]) <= pos["stop_loss"]:
+                    pos.update(status="closed", close_price=pos["stop_loss"],
+                               close_date=day_str, close_reason="stop_loss")
+                elif float(row["High"]) >= pos["t2"]:
+                    pos.update(status="closed", close_price=pos["t2"],
+                               close_date=day_str, close_reason="t2")
+
+            # Weekly: scan for new signals (after 50-day warmup)
+            if i < 50 or i % 5 != 0:
+                continue
+
+            active_tickers = {p["ticker"] for p in simulated_positions if p["status"] == "active"}
+            open_slots = max_positions - len(active_tickers)
+            if open_slots <= 0:
+                continue
+
+            candidates = []
+            for ticker, t_df in all_ticker_dfs.items():
+                if ticker in active_tickers:
+                    continue
+                window = t_df[t_df.index <= ts].iloc[-126:]
+                if len(window) < 50:
+                    continue
+                try:
+                    signal = score_signal(window)
+                    if signal["label"] != "KØB":
+                        continue
+                    levels = calculate_trade_levels(window)
+                    candidates.append((signal["score"], ticker, levels))
+                except Exception:
+                    continue
+
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            for _, ticker, levels in candidates[:open_slots]:
+                simulated_positions.append({
+                    "ticker": ticker,
+                    "source": "Portefølje-scan",
+                    "entry_price": levels["entry_mid"],
+                    "entry_date": day_str,
+                    "stop_loss": levels["stop_loss"],
+                    "t1": levels["t1"],
+                    "t2": levels["t2"],
+                    "status": "active",
+                    "t1_hit": False,
+                    "close_price": None,
+                    "close_date": None,
+                    "close_reason": None,
+                    "simulated": True,
+                })
+
+        portfolio["positions"] = simulated_positions + portfolio["positions"]
+
+    except Exception:
+        pass
+
+    portfolio["historical_backfill_complete"] = True
+    portfolio["backfill_date"] = cutoff_str
+    save_portfolio(portfolio)
+    return portfolio
+
+
 def scan_watchlist_for_signals(watchlist: list[str], portfolio: dict) -> list[dict]:
     max_positions = portfolio["start_capital"] // portfolio["position_size"]
     active_tickers = {p["ticker"] for p in portfolio["positions"] if p["status"] == "active"}
