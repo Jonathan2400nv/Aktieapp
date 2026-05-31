@@ -19,10 +19,17 @@ _DEFAULT_PORTFOLIO = {
 
 
 def load_portfolio() -> dict:
-    from services.supabase_client import load_from_supabase
-    data = load_from_supabase()
-    if data is not None:
-        return data
+    from services.supabase_client import load_from_supabase, _credentials
+    import logging
+    if _credentials():
+        try:
+            data = load_from_supabase()
+            if data is not None:
+                logging.info("SUPABASE: load OK")
+                return data
+            logging.warning("SUPABASE: load returned empty — tabel tom?")
+        except Exception as e:
+            logging.error(f"SUPABASE load fejl: {e}")
 
     path = Path(os.getenv("PORTFOLIO_PATH", str(_PORTFOLIO_PATH)))
     if not path.exists():
@@ -34,9 +41,15 @@ def load_portfolio() -> dict:
 
 
 def save_portfolio(portfolio: dict) -> None:
-    from services.supabase_client import save_to_supabase
-    if save_to_supabase(portfolio):
-        return
+    from services.supabase_client import save_to_supabase, _credentials
+    import logging
+    if _credentials():
+        try:
+            save_to_supabase(portfolio)
+            logging.info("SUPABASE: save OK")
+            return
+        except Exception as e:
+            logging.error(f"SUPABASE save fejl: {e}")
 
     path = Path(os.getenv("PORTFOLIO_PATH", str(_PORTFOLIO_PATH)))
     path.parent.mkdir(parents=True, exist_ok=True)

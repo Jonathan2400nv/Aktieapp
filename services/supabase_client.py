@@ -27,18 +27,15 @@ def load_from_supabase() -> dict | None:
         return None
     url, key = creds
     headers = {"apikey": key, "Authorization": f"Bearer {key}"}
-    try:
-        r = requests.get(
-            f"{url}/rest/v1/portfolio",
-            headers=headers,
-            params={"id": "eq.1", "select": "data"},
-            timeout=10,
-        )
-        r.raise_for_status()
-        rows = r.json()
-        return rows[0]["data"] if rows else None
-    except Exception:
-        return None
+    r = requests.get(
+        f"{url}/rest/v1/portfolio",
+        headers=headers,
+        params={"id": "eq.1", "select": "data"},
+        timeout=10,
+    )
+    r.raise_for_status()
+    rows = r.json()
+    return rows[0]["data"] if rows else None
 
 
 def save_to_supabase(portfolio: dict) -> bool:
@@ -52,14 +49,11 @@ def save_to_supabase(portfolio: dict) -> bool:
         "Content-Type": "application/json",
         "Prefer": "resolution=merge-duplicates",
     }
-    try:
-        r = requests.post(
-            f"{url}/rest/v1/portfolio",
-            headers=headers,
-            json={"id": 1, "data": portfolio},
-            timeout=10,
-        )
-        r.raise_for_status()
-        return True
-    except Exception:
-        return False
+    r = requests.post(
+        f"{url}/rest/v1/portfolio",
+        headers=headers,
+        json={"id": 1, "data": portfolio},
+        timeout=10,
+    )
+    r.raise_for_status()
+    return True
