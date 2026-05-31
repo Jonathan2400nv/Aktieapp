@@ -111,14 +111,14 @@ def scan_watchlist_for_signals(watchlist: list[str], portfolio: dict) -> list[di
 
 
 def get_performance_data(portfolio: dict) -> tuple[list[str], list[float], list[float]]:
-    start_str = portfolio["start_date"]
-    start_capital = portfolio["start_capital"]
-    position_size = portfolio["position_size"]
-
-    tickers = list({p["ticker"] for p in portfolio["positions"]})
-    all_tickers = tickers + ["SPY"]
-
     try:
+        start_str = portfolio["start_date"]
+        start_capital = portfolio["start_capital"]
+        position_size = portfolio["position_size"]
+
+        tickers = list({p["ticker"] for p in portfolio["positions"]})
+        all_tickers = tickers + ["SPY"]
+
         df_all = yf.download(all_tickers, start=start_str, progress=False, auto_adjust=True)
         if isinstance(df_all.columns, pd.MultiIndex):
             close_all = df_all["Close"]
@@ -126,55 +126,55 @@ def get_performance_data(portfolio: dict) -> tuple[list[str], list[float], list[
             # Single ticker — yfinance returns flat columns
             close_all = df_all[["Close"]]
             close_all.columns = all_tickers
+
+        if close_all.empty:
+            return [], [], []
+
+        # Normalize SPY to start_capital
+        if "SPY" in close_all.columns:
+            spy_prices = close_all["SPY"].dropna()
+            spy_start = float(spy_prices.iloc[0]) if not spy_prices.empty else 1.0
+        else:
+            spy_prices = pd.Series(dtype=float)
+            spy_start = 1.0
+
+        dates_out: list[str] = []
+        portfolio_vals: list[float] = []
+        spy_vals: list[float] = []
+
+        for ts in close_all.index:
+            d = ts.date()
+            total_pnl = 0.0
+
+            for pos in portfolio["positions"]:
+                entry_date = date.fromisoformat(pos["entry_date"])
+                if d < entry_date:
+                    continue
+                close_date = date.fromisoformat(pos["close_date"]) if pos["close_date"] else None
+                if close_date and d > close_date:
+                    pnl_pct = (pos["close_price"] - pos["entry_price"]) / pos["entry_price"]
+                else:
+                    ticker = pos["ticker"]
+                    if ticker in close_all.columns and ts in close_all.index:
+                        price = close_all.loc[ts, ticker]
+                        price = float(price) if not pd.isna(price) else pos["entry_price"]
+                    else:
+                        price = pos["entry_price"]
+                    pnl_pct = (price - pos["entry_price"]) / pos["entry_price"]
+                total_pnl += position_size * pnl_pct
+
+            dates_out.append(str(d))
+            portfolio_vals.append(start_capital + total_pnl)
+
+            if "SPY" in close_all.columns and ts in spy_prices.index:
+                spy_val = start_capital * float(spy_prices.loc[ts]) / spy_start
+            else:
+                spy_val = start_capital
+            spy_vals.append(spy_val)
+
+        return dates_out, portfolio_vals, spy_vals
     except Exception:
         return [], [], []
-
-    if close_all.empty:
-        return [], [], []
-
-    # Normalize SPY to start_capital
-    if "SPY" in close_all.columns:
-        spy_prices = close_all["SPY"].dropna()
-        spy_start = float(spy_prices.iloc[0]) if not spy_prices.empty else 1.0
-    else:
-        spy_prices = pd.Series(dtype=float)
-        spy_start = 1.0
-
-    dates_out: list[str] = []
-    portfolio_vals: list[float] = []
-    spy_vals: list[float] = []
-
-    for ts in close_all.index:
-        d = ts.date()
-        total_pnl = 0.0
-
-        for pos in portfolio["positions"]:
-            entry_date = date.fromisoformat(pos["entry_date"])
-            if d < entry_date:
-                continue
-            close_date = date.fromisoformat(pos["close_date"]) if pos["close_date"] else None
-            if close_date and d > close_date:
-                pnl_pct = (pos["close_price"] - pos["entry_price"]) / pos["entry_price"]
-            else:
-                ticker = pos["ticker"]
-                if ticker in close_all.columns and ts in close_all.index:
-                    price = close_all.loc[ts, ticker]
-                    price = float(price) if not pd.isna(price) else pos["entry_price"]
-                else:
-                    price = pos["entry_price"]
-                pnl_pct = (price - pos["entry_price"]) / pos["entry_price"]
-            total_pnl += position_size * pnl_pct
-
-        dates_out.append(str(d))
-        portfolio_vals.append(start_capital + total_pnl)
-
-        if "SPY" in close_all.columns and ts in spy_prices.index:
-            spy_val = start_capital * float(spy_prices.loc[ts]) / spy_start
-        else:
-            spy_val = start_capital
-        spy_vals.append(spy_val)
-
-    return dates_out, portfolio_vals, spy_vals
 
 
 def backfill_positions(portfolio: dict) -> dict:
