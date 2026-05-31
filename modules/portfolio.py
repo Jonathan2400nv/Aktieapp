@@ -9,13 +9,20 @@ from services.portfolio_service import (
     scan_watchlist_for_signals, calculate_pnl,
     get_current_price, get_performance_data,
 )
+from services.market_universe import get_us_tickers, get_european_tickers
 
 
 @st.cache_data(ttl=900)
-def _cached_scan(watchlist: tuple[str, ...], portfolio_json: str) -> list[dict]:
+def _cached_universe() -> tuple[str, ...]:
+    return tuple(sorted(set(get_us_tickers() + get_european_tickers())))
+
+
+@st.cache_data(ttl=900)
+def _cached_scan(portfolio_json: str) -> list[dict]:
     import json as _json
     portfolio = _json.loads(portfolio_json)
-    return scan_watchlist_for_signals(list(watchlist), portfolio)
+    universe = list(_cached_universe())
+    return scan_watchlist_for_signals(universe, portfolio)
 
 
 @st.cache_data(ttl=900)
@@ -72,21 +79,20 @@ def _build_chart(dates: list, portfolio_vals: list, spy_vals: list) -> go.Figure
 
 def render(watchlist: list[str]) -> None:
     st.header("📈 Modelportefølje")
-    st.caption("Lanceret 01.06.2025 · 100.000 kr. startkapital · Følger automatisk KØB-signaler")
+    st.caption("Lanceret 01.06.2025 · 100.000 kr. startkapital · Scanner S&P 500, NASDAQ, DAX, CAC 40, FTSE 100, EURO STOXX 50 og C25")
 
     with st.spinner("Opdaterer portefølje..."):
         portfolio = load_portfolio()
         portfolio = backfill_positions(portfolio)
 
-        if watchlist:
-            new_positions = _cached_scan(tuple(watchlist), json.dumps(portfolio, default=str))
-            if new_positions:
+        new_positions = _cached_scan(json.dumps(portfolio, default=str))
+        if new_positions:
                 active_tickers = {p["ticker"] for p in portfolio["positions"] if p["status"] == "active"}
-                for pos in new_positions:
-                    if pos["ticker"] not in active_tickers:
-                        portfolio["positions"].append(pos)
-                        active_tickers.add(pos["ticker"])
-                save_portfolio(portfolio)
+            for pos in new_positions:
+                if pos["ticker"] not in active_tickers:
+                    portfolio["positions"].append(pos)
+                    active_tickers.add(pos["ticker"])
+            save_portfolio(portfolio)
 
     active = [p for p in portfolio["positions"] if p["status"] == "active"]
     closed = [p for p in portfolio["positions"] if p["status"] == "closed"]
@@ -167,19 +173,9 @@ def render(watchlist: list[str]) -> None:
                 c6.write(_fmt_kr(pnl["pnl_kr"]))
                 c7.write(f":red[${pos['stop_loss']:.2f}]")
                 c8.write(f"${pos['t1']:.2f} / ${pos['t2']:.2f}")
-                c9_col, c10_col = c9.columns(2)
-                c9_col.write(f":{status_color}[{status}]")
-                if c10_col.button("Luk", key=f"close_{pos['ticker']}"):
-                    pos.update(
-                        status="closed",
-                        close_price=current,
-                        close_date=str(pd.Timestamp.now(tz="UTC").date()),
-                        close_reason="manual",
-                    )
-                    save_portfolio(portfolio)
-                    st.rerun()
+                c9.write(f":{status_color}[{status}]")
     else:
-        st.info("Ingen aktive positioner. Tilføj aktier til din watchlist for at starte scanning.")
+        st.info("Ingen aktive positioner endnu — scanner S&P 500, NASDAQ, DAX, CAC 40, FTSE 100, EURO STOXX 50 og C25 automatisk.")
 
     st.divider()
 
