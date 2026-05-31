@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import pandas as pd
 import yfinance as yf
 
 _PORTFOLIO_PATH = Path(os.getenv("PORTFOLIO_PATH", Path(__file__).parent.parent / "portfolio.json"))
@@ -54,3 +55,43 @@ def get_current_price(ticker: str) -> float | None:
         return float(price) if price is not None else None
     except Exception:
         return None
+
+
+def _fetch_ohlcv_range(ticker: str, start: str) -> pd.DataFrame | None:
+    try:
+        df = yf.download(ticker, start=start, progress=False, auto_adjust=True)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        return df if not df.empty else None
+    except Exception:
+        return None
+
+
+def backfill_positions(portfolio: dict) -> dict:
+    changed = False
+    for pos in portfolio["positions"]:
+        if pos["status"] != "active":
+            continue
+        df = _fetch_ohlcv_range(pos["ticker"], pos["entry_date"])
+        if df is None:
+            continue
+        entry_ts = pd.Timestamp(pos["entry_date"])
+        for ts, row in df.iterrows():
+            if pd.Timestamp(ts) < entry_ts:
+                continue
+            low = float(row["Low"])
+            high = float(row["High"])
+            date_str = str(pd.Timestamp(ts).date())
+            if low <= pos["stop_loss"]:
+                pos.update(status="closed", close_price=pos["stop_loss"],
+                           close_date=date_str, close_reason="stop_loss")
+                changed = True
+                break
+            if high >= pos["t2"]:
+                pos.update(status="closed", close_price=pos["t2"],
+                           close_date=date_str, close_reason="t2")
+                changed = True
+                break
+    if changed:
+        save_portfolio(portfolio)
+    return portfolio
