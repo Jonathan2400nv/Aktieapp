@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 
 def calculate_ma(close: pd.Series, period: int) -> pd.Series:
@@ -62,14 +63,21 @@ def calculate_adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
     low = df['Low'].squeeze()
     close = df['Close'].squeeze()
 
-    plus_dm = high.diff()
-    minus_dm = -low.diff()
-    plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0.0)
-    minus_dm = minus_dm.where((minus_dm > plus_dm.abs()) & (minus_dm > 0), 0.0)
+    up_move = high.diff()
+    down_move = -low.diff()
+    plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
+    minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
 
-    atr = calculate_atr(df, period)
-    plus_di = 100 * plus_dm.ewm(alpha=1/period, adjust=False).mean() / atr
-    minus_di = 100 * minus_dm.ewm(alpha=1/period, adjust=False).mean() / atr
+    prev_close = close.shift(1)
+    tr = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    atr_wilder = tr.ewm(alpha=1/period, adjust=False).mean()
+
+    plus_di = 100 * plus_dm.ewm(alpha=1/period, adjust=False).mean() / atr_wilder
+    minus_di = 100 * minus_dm.ewm(alpha=1/period, adjust=False).mean() / atr_wilder
 
     dx = (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, float('nan')) * 100
     adx = dx.ewm(alpha=1/period, adjust=False).mean()
@@ -79,8 +87,9 @@ def calculate_adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
 def calculate_obv(df: pd.DataFrame) -> pd.Series:
     close = df['Close'].squeeze()
     volume = df['Volume'].squeeze()
-    direction = close.diff().apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
-    return (direction * volume).cumsum()
+    direction = np.sign(close.diff())
+    obv = (direction * volume).fillna(0).cumsum()
+    return obv
 
 
 def calculate_bollinger(close: pd.Series, period: int = 20, std_dev: float = 2.0) -> tuple[pd.Series, pd.Series]:

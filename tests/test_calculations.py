@@ -157,7 +157,7 @@ class TestCalculateOBV:
 
 
 class TestCalculateBollinger:
-    def test_returns_three_series(self):
+    def test_returns_two_series(self):
         df = make_ohlcv()
         pct_b, bandwidth = calculate_bollinger(df['Close'])
         assert len(pct_b) == len(df)
