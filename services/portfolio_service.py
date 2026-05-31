@@ -1,4 +1,5 @@
 # services/portfolio_service.py
+import copy
 import json
 import os
 from datetime import date
@@ -20,11 +21,11 @@ _DEFAULT_PORTFOLIO = {
 def load_portfolio() -> dict:
     path = Path(os.getenv("PORTFOLIO_PATH", str(_PORTFOLIO_PATH)))
     if not path.exists():
-        return dict(_DEFAULT_PORTFOLIO)
+        return copy.deepcopy(_DEFAULT_PORTFOLIO)
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
-        return dict(_DEFAULT_PORTFOLIO)
+        return copy.deepcopy(_DEFAULT_PORTFOLIO)
 
 
 def save_portfolio(portfolio: dict) -> None:

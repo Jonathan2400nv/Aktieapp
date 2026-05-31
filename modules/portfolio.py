@@ -1,4 +1,5 @@
 # modules/portfolio.py
+import json
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -8,6 +9,20 @@ from services.portfolio_service import (
     scan_watchlist_for_signals, calculate_pnl,
     get_current_price, get_performance_data,
 )
+
+
+@st.cache_data(ttl=900)
+def _cached_scan(watchlist: tuple[str, ...], portfolio_json: str) -> list[dict]:
+    import json as _json
+    portfolio = _json.loads(portfolio_json)
+    return scan_watchlist_for_signals(list(watchlist), portfolio)
+
+
+@st.cache_data(ttl=900)
+def _cached_performance(portfolio_json: str) -> tuple[list[str], list[float], list[float]]:
+    import json as _json
+    portfolio = _json.loads(portfolio_json)
+    return get_performance_data(portfolio)
 
 
 def _status_label(pos: dict, current: float) -> str:
@@ -64,7 +79,7 @@ def render(watchlist: list[str]) -> None:
         portfolio = backfill_positions(portfolio)
 
         if watchlist:
-            new_positions = scan_watchlist_for_signals(watchlist, portfolio)
+            new_positions = _cached_scan(tuple(watchlist), json.dumps(portfolio, default=str))
             if new_positions:
                 active_tickers = {p["ticker"] for p in portfolio["positions"] if p["status"] == "active"}
                 for pos in new_positions:
@@ -97,7 +112,7 @@ def render(watchlist: list[str]) -> None:
 
     # Get performance data to derive SPY return for outperformance
     with st.spinner("Henter historisk kursdata..."):
-        dates, pvals, svals = get_performance_data(portfolio)
+        dates, pvals, svals = _cached_performance(json.dumps(portfolio, default=str))
 
     # Compute SPY return from svals (derived from get_performance_data)
     spy_return_pct = (svals[-1] / svals[0] - 1) if len(svals) >= 2 else 0.0
