@@ -46,9 +46,6 @@ def fetch_screener_data(ticker: str) -> dict | None:
             if current_price and not pd.isna(atr):
                 stop_loss = round(current_price - 2 * float(atr), 2)
 
-            adx_series = calculate_adx(df)
-            adx_val = round(float(adx_series.iloc[-1]), 1) if not pd.isna(adx_series.iloc[-1]) else None
-
             obv_series = calculate_obv(df)
             obv_rising = bool(float(obv_series.iloc[-1]) > float(obv_series.iloc[-5])) if len(obv_series) >= 5 else None
 
@@ -59,8 +56,7 @@ def fetch_screener_data(ticker: str) -> dict | None:
             stoch_k, _ = calculate_stoch_rsi(close)
             stoch_val = round(float(stoch_k.iloc[-1]) * 100, 1) if not pd.isna(stoch_k.iloc[-1]) else None
 
-            rsi_full = calculate_rsi(close)
-            div = detect_rsi_divergence(close, rsi_full)
+            div = detect_rsi_divergence(close, rsi_series)
 
             scored = score_signal(df)
             signal_score = scored['score']

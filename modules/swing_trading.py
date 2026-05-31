@@ -84,10 +84,10 @@ def render(watchlist: list[str]) -> None:
     label = scored['label']
     score = scored['score']
 
-    if label == 'KØB' and adx >= 20:
+    if label == 'KØB' and adx >= 25:
         st.success(f"**Signal: {label}** — Score: {score}/9 · ADX: {adx:.1f}")
-    elif label == 'KØB' and adx < 20:
-        st.warning(f"**Signal: KØB (ADX {adx:.1f} < 20 — svag trend, afvent)** — Score: {score}/9")
+    elif label == 'KØB' and adx < 25:
+        st.warning(f"**Signal: KØB (ADX {adx:.1f} < 25 — svag trend, afvent)** — Score: {score}/9")
     elif label == 'SÆLG':
         st.error(f"**Signal: {label}** — Score: {score}/9 · ADX: {adx:.1f}")
     else:
@@ -105,7 +105,7 @@ def render(watchlist: list[str]) -> None:
     col4.metric("Volumen-spike", "Ja" if spike.iloc[-1] else "Nej")
     col5.metric("ATR", f"${atr:.2f}")
 
-    if label == 'KØB' and adx >= 20:
+    if label == 'KØB' and adx >= 25:
         st.divider()
         st.subheader("Handelsstrategi")
         rr = levels['rr']

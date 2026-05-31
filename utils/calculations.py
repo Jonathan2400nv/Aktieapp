@@ -151,6 +151,11 @@ def detect_rsi_divergence(close: pd.Series, rsi: pd.Series, lookback: int = 20) 
 
 
 def calculate_trade_levels(df: pd.DataFrame) -> dict:
+    """
+    Returns BUY trade levels based on ATR.
+    T1 uses the higher of 20-day resistance or entry_mid + 1.5×ATR.
+    entry_mid is skewed below current price (conservative entry zone).
+    """
     close = df['Close'].squeeze()
     atr_series = calculate_atr(df)
     atr = float(atr_series.iloc[-1])
