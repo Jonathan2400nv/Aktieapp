@@ -150,6 +150,37 @@ def detect_rsi_divergence(close: pd.Series, rsi: pd.Series, lookback: int = 20) 
     return {'bullish': bool(bullish), 'bearish': bool(bearish)}
 
 
+def calculate_trade_levels(df: pd.DataFrame) -> dict:
+    close = df['Close'].squeeze()
+    atr_series = calculate_atr(df)
+    atr = float(atr_series.iloc[-1])
+    current = float(close.iloc[-1])
+
+    entry_low = round(current - atr, 2)
+    entry_high = round(current + 0.5 * atr, 2)
+    entry_mid = round((entry_low + entry_high) / 2, 2)
+    stop_loss = round(current - 2 * atr, 2)
+
+    resistance_20d = float(df['High'].squeeze().iloc[-20:].max()) if len(df) >= 20 else current + 1.5 * atr
+    t1 = round(max(resistance_20d, entry_mid + 1.5 * atr), 2)
+    t2 = round(entry_mid + 3 * atr, 2)
+
+    risk = entry_mid - stop_loss
+    reward = t1 - entry_mid
+    rr = round(reward / risk, 2) if risk > 0 else 0.0
+
+    return {
+        'entry_low': entry_low,
+        'entry_high': entry_high,
+        'entry_mid': entry_mid,
+        'stop_loss': stop_loss,
+        't1': t1,
+        't2': t2,
+        'rr': rr,
+        'atr': round(atr, 2),
+    }
+
+
 def score_signal(df: pd.DataFrame) -> dict:
     """
     Returns score dict: {'score': int, 'label': str, 'breakdown': dict, 'adx': float}.

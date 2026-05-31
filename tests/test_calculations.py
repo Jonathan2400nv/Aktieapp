@@ -5,6 +5,7 @@ from utils.calculations import (
     calculate_rsi, calculate_ma, detect_volume_spike, get_signal,
     calculate_adx, calculate_obv, calculate_bollinger,
     calculate_stoch_rsi, calculate_vwap, detect_rsi_divergence, score_signal,
+    calculate_trade_levels,
 )
 
 
@@ -305,3 +306,38 @@ class TestScoreSignal:
         df = self._base_inputs()
         result = score_signal(df)
         assert result['score'] == sum(result['breakdown'].values())
+
+
+class TestCalculateTradeLevels:
+    def _make_df(self, n=60):
+        close = pd.Series([100.0 + i * 0.2 for i in range(n)])
+        high = close + 0.5
+        low = close - 0.5
+        volume = pd.Series([1_000_000.0] * n)
+        return pd.DataFrame({'Close': close, 'High': high, 'Low': low, 'Volume': volume})
+
+    def test_returns_expected_keys(self):
+        df = self._make_df()
+        result = calculate_trade_levels(df)
+        for key in ('entry_low', 'entry_high', 'entry_mid', 'stop_loss', 't1', 't2', 'rr', 'atr'):
+            assert key in result, f"Missing key: {key}"
+
+    def test_stop_below_entry(self):
+        df = self._make_df()
+        result = calculate_trade_levels(df)
+        assert result['stop_loss'] < result['entry_low']
+
+    def test_t1_above_entry(self):
+        df = self._make_df()
+        result = calculate_trade_levels(df)
+        assert result['t1'] > result['entry_high']
+
+    def test_t2_above_t1(self):
+        df = self._make_df()
+        result = calculate_trade_levels(df)
+        assert result['t2'] > result['t1']
+
+    def test_rr_positive(self):
+        df = self._make_df()
+        result = calculate_trade_levels(df)
+        assert result['rr'] > 0
