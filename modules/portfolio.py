@@ -2,9 +2,10 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import yfinance as yf
 from services.portfolio_service import (
     load_portfolio, save_portfolio, backfill_positions,
-    scan_watchlist_for_signals, calculate_pnl, calculate_portfolio_value,
+    scan_watchlist_for_signals, calculate_pnl,
     get_current_price, get_performance_data,
 )
 
@@ -94,17 +95,12 @@ def render(watchlist: list[str]) -> None:
     portfolio_value = portfolio["start_capital"] + all_pnl_kr
     total_return_pct = all_pnl_kr / portfolio["start_capital"]
 
-    # SPY return for outperformance
-    try:
-        import yfinance as yf
-        spy_raw = yf.download("SPY", start=portfolio["start_date"], progress=False, auto_adjust=True)
-        if isinstance(spy_raw.columns, pd.MultiIndex):
-            spy_raw.columns = spy_raw.columns.get_level_values(0)
-        spy_close = spy_raw["Close"].squeeze().dropna()
-        spy_return_pct = float(spy_close.iloc[-1] / spy_close.iloc[0] - 1) if len(spy_close) >= 2 else 0.0
-    except Exception:
-        spy_return_pct = 0.0
+    # Get performance data to derive SPY return for outperformance
+    with st.spinner("Henter historisk kursdata..."):
+        dates, pvals, svals = get_performance_data(portfolio)
 
+    # Compute SPY return from svals (derived from get_performance_data)
+    spy_return_pct = (svals[-1] / svals[0] - 1) if len(svals) >= 2 else 0.0
     outperformance = total_return_pct - spy_return_pct
 
     # --- KPI row ---
@@ -129,9 +125,6 @@ def render(watchlist: list[str]) -> None:
     st.divider()
 
     # --- Performance chart ---
-    with st.spinner("Henter historisk kursdata..."):
-        dates, pvals, svals = get_performance_data(portfolio)
-
     if dates:
         st.plotly_chart(_build_chart(dates, pvals, svals), use_container_width=True)
     else:
