@@ -195,3 +195,61 @@ class TestBackfill:
             with patch("services.portfolio_service.save_portfolio"):
                 result = backfill_positions(portfolio)
         assert result["positions"][0]["status"] == "active"
+
+
+class TestScanWatchlist:
+    def _make_df(self, n=100):
+        """Minimal OHLCV df with enough rows for score_signal."""
+        idx = pd.date_range("2024-01-01", periods=n, freq="B")
+        price = 100 + np.cumsum(np.random.randn(n) * 0.5)
+        return pd.DataFrame({
+            "Open": price,
+            "High": price * 1.01,
+            "Low": price * 0.99,
+            "Close": price,
+            "Volume": np.ones(n) * 1_000_000,
+        }, index=idx)
+
+    def test_skips_tickers_with_active_position(self):
+        from services.portfolio_service import scan_watchlist_for_signals
+        portfolio = {**_DEFAULT, "positions": [_make_pos("AAPL", status="active")]}
+        with patch("services.portfolio_service._fetch_ohlcv_for_scan", return_value=self._make_df()):
+            with patch("services.portfolio_service.score_signal", return_value={"label": "KØB", "score": 6, "breakdown": {}, "adx": 30.0}):
+                with patch("services.portfolio_service.calculate_trade_levels", return_value={"entry_mid": 105.0, "stop_loss": 95.0, "t1": 115.0, "t2": 125.0, "rr": 1.5, "atr": 5.0, "entry_low": 100.0, "entry_high": 110.0}):
+                    result = scan_watchlist_for_signals(["AAPL"], portfolio)
+        assert result == []
+
+    def test_adds_buy_signal(self):
+        from services.portfolio_service import scan_watchlist_for_signals
+        portfolio = {**_DEFAULT, "positions": []}
+        with patch("services.portfolio_service._fetch_ohlcv_for_scan", return_value=self._make_df()):
+            with patch("services.portfolio_service.score_signal", return_value={"label": "KØB", "score": 6, "breakdown": {}, "adx": 30.0}):
+                with patch("services.portfolio_service.calculate_trade_levels", return_value={"entry_mid": 105.0, "stop_loss": 95.0, "t1": 115.0, "t2": 125.0, "rr": 1.5, "atr": 5.0, "entry_low": 100.0, "entry_high": 110.0}):
+                    result = scan_watchlist_for_signals(["MSFT"], portfolio)
+        assert len(result) == 1
+        assert result[0]["ticker"] == "MSFT"
+        assert result[0]["entry_price"] == 105.0
+        assert result[0]["status"] == "active"
+        assert result[0]["source"] == "Portefølje-scan"
+
+    def test_skips_neutral_signal(self):
+        from services.portfolio_service import scan_watchlist_for_signals
+        portfolio = {**_DEFAULT, "positions": []}
+        with patch("services.portfolio_service._fetch_ohlcv_for_scan", return_value=self._make_df()):
+            with patch("services.portfolio_service.score_signal", return_value={"label": "Neutral", "score": 3, "breakdown": {}, "adx": 20.0}):
+                result = scan_watchlist_for_signals(["MSFT"], portfolio)
+        assert result == []
+
+    def test_skips_short_dataframe(self):
+        from services.portfolio_service import scan_watchlist_for_signals
+        portfolio = {**_DEFAULT, "positions": []}
+        with patch("services.portfolio_service._fetch_ohlcv_for_scan", return_value=self._make_df(n=10)):
+            result = scan_watchlist_for_signals(["MSFT"], portfolio)
+        assert result == []
+
+    def test_skips_none_dataframe(self):
+        from services.portfolio_service import scan_watchlist_for_signals
+        portfolio = {**_DEFAULT, "positions": []}
+        with patch("services.portfolio_service._fetch_ohlcv_for_scan", return_value=None):
+            result = scan_watchlist_for_signals(["MSFT"], portfolio)
+        assert result == []

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import pandas as pd
 import yfinance as yf
+from utils.calculations import score_signal, calculate_trade_levels
 
 _PORTFOLIO_PATH = Path(os.getenv("PORTFOLIO_PATH", Path(__file__).parent.parent / "portfolio.json"))
 
@@ -65,6 +66,47 @@ def _fetch_ohlcv_range(ticker: str, start: str) -> pd.DataFrame | None:
         return df if not df.empty else None
     except Exception:
         return None
+
+
+def _fetch_ohlcv_for_scan(ticker: str) -> pd.DataFrame | None:
+    try:
+        df = yf.download(ticker, period="6mo", progress=False, auto_adjust=True)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        return df if not df.empty else None
+    except Exception:
+        return None
+
+
+def scan_watchlist_for_signals(watchlist: list[str], portfolio: dict) -> list[dict]:
+    active_tickers = {p["ticker"] for p in portfolio["positions"] if p["status"] == "active"}
+    today = str(pd.Timestamp.now(tz="UTC").date())
+    new_positions = []
+    for ticker in watchlist:
+        if ticker in active_tickers:
+            continue
+        df = _fetch_ohlcv_for_scan(ticker)
+        if df is None or len(df) < 50:
+            continue
+        signal = score_signal(df)
+        if signal["label"] != "KØB":
+            continue
+        levels = calculate_trade_levels(df)
+        new_positions.append({
+            "ticker": ticker,
+            "source": "Portefølje-scan",
+            "entry_price": levels["entry_mid"],
+            "entry_date": today,
+            "stop_loss": levels["stop_loss"],
+            "t1": levels["t1"],
+            "t2": levels["t2"],
+            "status": "active",
+            "t1_hit": False,
+            "close_price": None,
+            "close_date": None,
+            "close_reason": None,
+        })
+    return new_positions
 
 
 def backfill_positions(portfolio: dict) -> dict:
