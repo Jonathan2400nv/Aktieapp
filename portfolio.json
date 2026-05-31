@@ -1,0 +1,49 @@
+{
+  "start_date": "2025-06-01",
+  "start_capital": 100000,
+  "position_size": 10000,
+  "positions": [
+    {
+      "ticker": "MSFT",
+      "source": "Portef\u00f8lje-scan",
+      "entry_price": 447.32,
+      "entry_date": "2026-05-31",
+      "stop_loss": 426.91,
+      "t1": 464.82,
+      "t2": 482.31,
+      "status": "active",
+      "t1_hit": false,
+      "close_price": null,
+      "close_date": null,
+      "close_reason": null
+    },
+    {
+      "ticker": "AMZN",
+      "source": "Portef\u00f8lje-scan",
+      "entry_price": 269.04,
+      "entry_date": "2026-05-31",
+      "stop_loss": 257.79,
+      "t1": 278.68,
+      "t2": 288.31,
+      "status": "active",
+      "t1_hit": false,
+      "close_price": null,
+      "close_date": null,
+      "close_reason": null
+    },
+    {
+      "ticker": "NVO",
+      "source": "Portef\u00f8lje-scan",
+      "entry_price": 45.3,
+      "entry_date": "2026-05-31",
+      "stop_loss": 43.31,
+      "t1": 47.79,
+      "t2": 48.7,
+      "status": "active",
+      "t1_hit": false,
+      "close_price": null,
+      "close_date": null,
+      "close_reason": null
+    }
+  ]
+}
