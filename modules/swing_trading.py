@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 from services.yfinance_service import fetch_ohlcv
-from components.charts import build_swing_chart
+from components.charts import build_price_chart, build_indicator_chart, INDICATOR_OPTIONS
 from utils.calculations import (
     calculate_ma, calculate_rsi, calculate_macd, calculate_atr,
     detect_volume_spike, score_signal, calculate_trade_levels,
@@ -77,7 +77,18 @@ def render(watchlist: list[str]) -> None:
     adx = scored['adx']
 
     st.plotly_chart(
-        build_swing_chart(df, ticker, stop_loss=levels['stop_loss']),
+        build_price_chart(df, ticker, stop_loss=levels['stop_loss']),
+        use_container_width=True,
+    )
+
+    selected_indicator = st.radio(
+        "Indikator",
+        INDICATOR_OPTIONS,
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+    st.plotly_chart(
+        build_indicator_chart(df, selected_indicator),
         use_container_width=True,
     )
 
