@@ -19,15 +19,10 @@ _DEFAULT_PORTFOLIO = {
 
 
 def load_portfolio() -> dict:
-    try:
-        from services.supabase_client import get_client
-        client = get_client()
-        if client:
-            res = client.table("portfolio").select("data").eq("id", 1).execute()
-            if res.data:
-                return res.data[0]["data"]
-    except Exception:
-        pass
+    from services.supabase_client import load_from_supabase
+    data = load_from_supabase()
+    if data is not None:
+        return data
 
     path = Path(os.getenv("PORTFOLIO_PATH", str(_PORTFOLIO_PATH)))
     if not path.exists():
@@ -39,14 +34,9 @@ def load_portfolio() -> dict:
 
 
 def save_portfolio(portfolio: dict) -> None:
-    try:
-        from services.supabase_client import get_client
-        client = get_client()
-        if client:
-            client.table("portfolio").upsert({"id": 1, "data": portfolio}).execute()
-            return
-    except Exception:
-        pass
+    from services.supabase_client import save_to_supabase
+    if save_to_supabase(portfolio):
+        return
 
     path = Path(os.getenv("PORTFOLIO_PATH", str(_PORTFOLIO_PATH)))
     path.parent.mkdir(parents=True, exist_ok=True)
