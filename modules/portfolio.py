@@ -208,6 +208,25 @@ def render(watchlist: list[str]) -> None:
         if changed:
             save_portfolio(portfolio)
 
+    # --- Last scan service message ---
+    last_scan = portfolio.get("last_scan")
+    if last_scan:
+        try:
+            from datetime import timezone
+            ts = date.fromisoformat(last_scan[:10])
+            days_ago = (date.today() - ts).days
+            if days_ago == 0:
+                scan_label = "i dag"
+            elif days_ago == 1:
+                scan_label = "i går"
+            else:
+                scan_label = f"for {days_ago} dage siden"
+            st.info(f"🤖 Automatisk daglig scan kørte **{scan_label}** ({last_scan[:10]}) · Næste scan: hverdage kl. 22:00 CET")
+        except Exception:
+            pass
+    else:
+        st.info("🤖 Automatisk daglig scan kører **hverdage kl. 22:00 CET** — porteføljen opdateres selv mens du er væk")
+
     active = [p for p in portfolio["positions"] if p["status"] == "active"]
     closed = [p for p in portfolio["positions"] if p["status"] == "closed"]
     position_size = portfolio["position_size"]

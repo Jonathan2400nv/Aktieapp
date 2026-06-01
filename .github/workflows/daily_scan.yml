@@ -1,0 +1,33 @@
+name: Daglig Portefølje-scan
+
+on:
+  schedule:
+    # Kører kl. 22:00 CET (21:00 UTC) på hverdage — efter markedet lukker
+    - cron: '0 21 * * 1-5'
+  workflow_dispatch:  # Tillad manuel kørsel fra GitHub
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout kode
+        uses: actions/checkout@v4
+
+      - name: Opsæt Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Installer afhængigheder
+        run: |
+          pip install --upgrade pip
+          pip install yfinance pandas requests numpy python-dotenv
+
+      - name: Kør daglig scan
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python scripts/daily_scan.py
