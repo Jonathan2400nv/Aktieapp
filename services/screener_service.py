@@ -24,17 +24,53 @@ def _dcf(free_cashflow: float, growth_rate: float, shares: int) -> float | None:
     return round((pv_sum + pv_terminal) / shares, 2)
 
 
-@st.cache_data(ttl=3600)
-def fetch_screener_data(ticker: str) -> dict | None:
+def _download_ohlcv(ticker: str) -> pd.DataFrame | None:
+    """yf.download with Ticker.history() fallback — resilient on Streamlit Cloud."""
     try:
-        t = yf.Ticker(ticker)
-        info = t.info or {}
-
         df = yf.download(ticker, period="6mo", progress=False, auto_adjust=True)
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
+        if not df.empty:
+            df = df.loc[:, ~df.columns.duplicated()]
+            return df
+    except Exception:
+        pass
+    try:
+        df = yf.Ticker(ticker).history(period="6mo", auto_adjust=True)
+        if not df.empty:
+            df = df.loc[:, ~df.columns.duplicated()]
+            return df
+    except Exception:
+        pass
+    return None
 
-        current_price = info.get('currentPrice') or info.get('regularMarketPrice')
+
+@st.cache_data(ttl=1800)
+def fetch_screener_data(ticker: str) -> dict | None:
+    try:
+        t = yf.Ticker(ticker)
+
+        # info can fail with rate limiting — try fast_info for price, fall back to info
+        info = {}
+        current_price = None
+        try:
+            fi = t.fast_info
+            current_price = getattr(fi, 'last_price', None)
+        except Exception:
+            pass
+        try:
+            info = t.info or {}
+            if current_price is None:
+                current_price = info.get('currentPrice') or info.get('regularMarketPrice')
+        except Exception:
+            pass
+
+        df = _download_ohlcv(ticker)
+        if df is None:
+            df = pd.DataFrame()
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
         close = df['Close'].squeeze() if not df.empty else None
 
         rsi_val = ma20_val = ma50_val = None

@@ -98,9 +98,18 @@ def _fetch_ohlcv_for_scan(ticker: str) -> pd.DataFrame | None:
         df = yf.download(ticker, period="6mo", progress=False, auto_adjust=True)
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
-        return df if not df.empty else None
+        df = df.loc[:, ~df.columns.duplicated()]
+        if not df.empty:
+            return df
     except Exception:
-        return None
+        pass
+    try:
+        df = yf.Ticker(ticker).history(period="6mo", auto_adjust=True)
+        if not df.empty:
+            return df.loc[:, ~df.columns.duplicated()]
+    except Exception:
+        pass
+    return None
 
 
 def backfill_historical_signals(portfolio: dict, universe: list[str]) -> dict:

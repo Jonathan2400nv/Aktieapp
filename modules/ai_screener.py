@@ -52,15 +52,22 @@ def render(watchlist: list[str]) -> None:
 
     if st.button("Kør AI Screener", type="primary"):
         st.session_state.screener_results = {}
+        st.session_state.screener_failed = []
         progress = st.progress(0, text="Henter data...")
 
         for i, ticker in enumerate(selected):
-            progress.progress((i + 1) / len(selected), text=f"Analyserer {ticker}...")
+            progress.progress((i + 1) / len(selected), text=f"Henter {ticker}...")
             data = fetch_screener_data(ticker)
             if data:
                 st.session_state.screener_results[ticker] = data
+            else:
+                st.session_state.screener_failed.append(ticker)
 
         progress.empty()
+
+    failed = st.session_state.get("screener_failed", [])
+    if failed:
+        st.warning(f"Kunne ikke hente data for: {', '.join(failed)} — prøv 'Genindlæs data' i sidebaren.")
 
     if not st.session_state.get("screener_results"):
         return
