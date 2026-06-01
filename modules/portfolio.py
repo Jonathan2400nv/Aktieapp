@@ -117,8 +117,8 @@ def _render_active_table(active: list, current_prices: dict, position_size: int)
         rows_html += f"""
         <tr>
           <td style="{td_base}">
-            <span style="font-weight:600;color:#fff;font-size:14px">{pos['ticker']}</span>{sim_tag}
-            <div style="color:#555;font-size:10px;margin-top:2px">{pos['entry_date']}</div>
+            <span style="font-weight:600;font-size:14px">{pos['ticker']}</span>{sim_tag}
+            <div style="color:#888;font-size:10px;margin-top:2px">{pos['entry_date']}</div>
           </td>
           <td style="{td_base};color:#888;font-size:11px">{pos['source']}</td>
           <td style="{td_base};color:#aaa;font-family:monospace">${pos['entry_price']:.2f}</td>
