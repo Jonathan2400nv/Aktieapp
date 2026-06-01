@@ -6,6 +6,7 @@ st.set_page_config(
     page_title="Aktier AI",
     page_icon="📈",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 st.markdown("""
@@ -16,9 +17,12 @@ html, body, [class*="css"] {
 }
 
 /* ── Remove Streamlit chrome ────────────────────── */
-#MainMenu, footer, header { visibility: hidden; }
-/* Keep sidebar expand button visible when sidebar is collapsed */
-[data-testid="stSidebarCollapsedControl"] { visibility: visible !important; }
+/* Use display:none so sidebar is completely unaffected */
+header[data-testid="stHeader"] { display: none !important; }
+footer { display: none !important; }
+#MainMenu { display: none !important; }
+/* Hide the sidebar collapse button — sidebar stays permanently open */
+[data-testid="stSidebarCollapseButton"] { display: none !important; }
 .block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
 
 /* ── Tabs ───────────────────────────────────────── */

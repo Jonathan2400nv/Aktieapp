@@ -79,12 +79,7 @@ def render_watchlist_sidebar() -> list[str]:
             else:
                 st.warning("Ugyldig ticker.")
 
-        st.divider()
-        col_r, col_c = st.columns(2)
-        if col_r.button("⟳ Genindlæs", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
-        if col_c.button("🗑️ Ryd cache", use_container_width=True):
+        if st.button("⟳ Genindlæs data", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
 
