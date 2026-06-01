@@ -16,7 +16,9 @@ html, body, [class*="css"] {
 }
 
 /* ── Remove Streamlit chrome ────────────────────── */
-footer { visibility: hidden; }
+#MainMenu, footer, header { visibility: hidden; }
+/* Keep sidebar expand button visible when sidebar is collapsed */
+[data-testid="stSidebarCollapsedControl"] { visibility: visible !important; }
 .block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
 
 /* ── Tabs ───────────────────────────────────────── */

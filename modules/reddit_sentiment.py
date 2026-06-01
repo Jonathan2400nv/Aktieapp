@@ -1,3 +1,4 @@
+import html as _html
 import streamlit as st
 from services.reddit_service import fetch_reddit_posts, fetch_stocktwits_posts
 from services.claude_service import get_reddit_summary
@@ -8,9 +9,9 @@ def _render_cards(posts: list[dict]) -> None:
     for p in posts:
         score = p.get("score", 0)
         comments = p.get("comments", 0)
-        source = p.get("subreddit", "")
-        title = p.get("title", "")[:120]
-        desc = p.get("beskrivelse", "")[:160]
+        source = _html.escape(str(p.get("subreddit", "")))
+        title = _html.escape(p.get("title", "")[:120])
+        desc = _html.escape(p.get("beskrivelse", "")[:160])
         link = p.get("link", "#")
 
         score_color = "#4caf50" if score > 100 else ("#ffc107" if score > 10 else "#888")
