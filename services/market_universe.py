@@ -1,5 +1,10 @@
 import pandas as pd
-import streamlit as st
+try:
+    import streamlit as st
+except ImportError:
+    from unittest.mock import MagicMock
+    st = MagicMock()
+    st.cache_data = lambda *a, **kw: (a[0] if a and callable(a[0]) else lambda f: f)
 
 
 @st.cache_data(ttl=86400)
