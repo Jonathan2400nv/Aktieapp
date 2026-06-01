@@ -11,10 +11,11 @@ from utils.calculations import score_signal, calculate_trade_levels
 _PORTFOLIO_PATH = Path(os.getenv("PORTFOLIO_PATH", Path(__file__).parent.parent / "portfolio.json"))
 
 _DEFAULT_PORTFOLIO = {
-    "start_date": "2025-06-01",
+    "start_date": "2026-05-31",
     "start_capital": 100000,
     "position_size": 10000,
     "positions": [],
+    "scan_offset": 0,
 }
 
 
@@ -224,42 +225,62 @@ def backfill_historical_signals(portfolio: dict, universe: list[str]) -> dict:
     return portfolio
 
 
-def scan_watchlist_for_signals(watchlist: list[str], portfolio: dict) -> list[dict]:
+_SCAN_BATCH_SIZE = 50
+
+
+def scan_next_batch(universe: list[str], portfolio: dict) -> tuple[list[dict], int]:
+    """Scan the next batch of `_SCAN_BATCH_SIZE` tickers from `universe`.
+    Returns (new_positions, next_offset). Wraps around when the full universe
+    has been scanned (next_offset resets to 0)."""
     max_positions = portfolio["start_capital"] // portfolio["position_size"]
     active_tickers = {p["ticker"] for p in portfolio["positions"] if p["status"] == "active"}
     open_slots = max_positions - len(active_tickers)
-    if open_slots <= 0:
-        return []
+
+    offset = portfolio.get("scan_offset", 0) % max(len(universe), 1)
+    batch = universe[offset: offset + _SCAN_BATCH_SIZE]
+    next_offset = (offset + _SCAN_BATCH_SIZE) % max(len(universe), 1)
+
+    if open_slots <= 0 or not batch:
+        return [], next_offset
 
     today = str(pd.Timestamp.now(tz="UTC").date())
     candidates = []
-    for ticker in watchlist:
+    for ticker in batch:
         if ticker in active_tickers:
             continue
         df = _fetch_ohlcv_for_scan(ticker)
         if df is None or len(df) < 50:
             continue
-        signal = score_signal(df)
-        if signal["label"] != "KØB":
+        try:
+            signal = score_signal(df)
+            if signal["label"] != "KØB":
+                continue
+            levels = calculate_trade_levels(df)
+            candidates.append((signal["score"], {
+                "ticker": ticker,
+                "source": "Portefølje-scan",
+                "entry_price": levels["entry_mid"],
+                "entry_date": today,
+                "stop_loss": levels["stop_loss"],
+                "t1": levels["t1"],
+                "t2": levels["t2"],
+                "status": "active",
+                "t1_hit": False,
+                "close_price": None,
+                "close_date": None,
+                "close_reason": None,
+            }))
+        except Exception:
             continue
-        levels = calculate_trade_levels(df)
-        candidates.append((signal["score"], {
-            "ticker": ticker,
-            "source": "Portefølje-scan",
-            "entry_price": levels["entry_mid"],
-            "entry_date": today,
-            "stop_loss": levels["stop_loss"],
-            "t1": levels["t1"],
-            "t2": levels["t2"],
-            "status": "active",
-            "t1_hit": False,
-            "close_price": None,
-            "close_date": None,
-            "close_reason": None,
-        }))
 
     candidates.sort(key=lambda x: x[0], reverse=True)
-    return [pos for _, pos in candidates[:open_slots]]
+    return [pos for _, pos in candidates[:open_slots]], next_offset
+
+
+def scan_watchlist_for_signals(watchlist: list[str], portfolio: dict) -> list[dict]:
+    """Legacy full-scan kept for compatibility. Use scan_next_batch for incremental scanning."""
+    new_positions, _ = scan_next_batch(watchlist, portfolio)
+    return new_positions
 
 
 def get_performance_data(portfolio: dict) -> tuple[list[str], list[float], list[float]]:

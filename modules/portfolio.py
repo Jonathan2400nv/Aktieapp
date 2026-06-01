@@ -1,35 +1,19 @@
 # modules/portfolio.py
-import json
 from datetime import date, timedelta
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from services.portfolio_service import (
     load_portfolio, save_portfolio, backfill_positions,
-    backfill_historical_signals, scan_watchlist_for_signals,
-    calculate_pnl, get_current_price, get_performance_data,
+    scan_next_batch, calculate_pnl, get_current_price, get_performance_data,
 )
 from services.market_universe import get_us_tickers, get_european_tickers
 
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=3600)
 def _cached_universe() -> tuple[str, ...]:
     return tuple(sorted(set(get_us_tickers() + get_european_tickers())))
 
-
-@st.cache_data(ttl=900)
-def _cached_scan(portfolio_json: str) -> list[dict]:
-    import json as _json
-    portfolio = _json.loads(portfolio_json)
-    universe = list(_cached_universe())
-    return scan_watchlist_for_signals(universe, portfolio)
-
-
-@st.cache_data(ttl=900)
-def _cached_performance(portfolio_json: str) -> tuple[list[str], list[float], list[float]]:
-    import json as _json
-    portfolio = _json.loads(portfolio_json)
-    return get_performance_data(portfolio)
 
 
 def _status_label(pos: dict, current: float) -> str:
@@ -199,25 +183,29 @@ def _period_kpis(pvals: list[float], svals: list[float], start_capital: float) -
 
 def render(watchlist: list[str]) -> None:
     st.header("📈 Modelportefølje")
-    st.caption("Lanceret 01.06.2025 · 100.000 kr. startkapital · Scanner S&P 500, NASDAQ, DAX, CAC 40, FTSE 100, EURO STOXX 50 og C25")
+    st.caption("Lanceret 31.05.2026 · 100.000 kr. startkapital · Scanner S&P 500, NASDAQ, DAX, CAC 40, FTSE 100, EURO STOXX 50 og C25")
 
     with st.spinner("Opdaterer portefølje..."):
         portfolio = load_portfolio()
-
-        if not portfolio.get("historical_backfill_complete"):
-            universe = list(_cached_universe())
-            with st.spinner("Simulerer historisk performance fra 01.06.2025 (kører én gang — tager 1-2 min)..."):
-                portfolio = backfill_historical_signals(portfolio, universe)
-
         portfolio = backfill_positions(portfolio)
 
-        new_positions = _cached_scan(json.dumps(portfolio, default=str))
+        universe = list(_cached_universe())
+        new_positions, next_offset = scan_next_batch(universe, portfolio)
+
+        changed = False
         if new_positions:
             active_tickers = {p["ticker"] for p in portfolio["positions"] if p["status"] == "active"}
             for pos in new_positions:
                 if pos["ticker"] not in active_tickers:
                     portfolio["positions"].append(pos)
                     active_tickers.add(pos["ticker"])
+            changed = True
+
+        if next_offset != portfolio.get("scan_offset", 0):
+            portfolio["scan_offset"] = next_offset
+            changed = True
+
+        if changed:
             save_portfolio(portfolio)
 
     active = [p for p in portfolio["positions"] if p["status"] == "active"]
@@ -233,7 +221,7 @@ def render(watchlist: list[str]) -> None:
 
     # Full performance data (all time)
     with st.spinner("Henter historisk kursdata..."):
-        dates, pvals, svals = _cached_performance(json.dumps(portfolio, default=str))
+        dates, pvals, svals = get_performance_data(portfolio)
 
     # --- Period selector ---
     period_cols = st.columns(len(_PERIOD_OPTIONS))
@@ -273,26 +261,6 @@ def render(watchlist: list[str]) -> None:
         f"{len(closed)} lukkede",
         delta_color="off",
     )
-
-    # --- Disclaimer ---
-    if portfolio.get("historical_backfill_complete") and portfolio.get("backfill_date"):
-        with st.expander("ℹ️ Om den historiske performance"):
-            st.markdown(
-                f"""
-**Dele af denne performance er simuleret.**
-
-Positioner fra **01.06.2025** til **{portfolio['backfill_date']}** er rekonstrueret
-baseret på de tekniske signaler der var tilgængelige på de pågældende datoer.
-Ingen fremtidig data er brugt *(ingen look-ahead bias)*.
-
-**Forbehold:**
-- Scanningen kørte ugentligt i simuleringen — ikke dagligt som i live-drift
-- Aktiver der er udgået af indeksene siden 2025 er ikke medtaget *(survivorship bias)*
-- Indgangspris er closing-kurs på signaldagen, ikke næste dags åbningskurs
-
-Dette er **ikke professionel backtesting** — det er en indikation af strategiens historiske adfærd.
-                """
-            )
 
     st.divider()
 

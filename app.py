@@ -16,7 +16,7 @@ html, body, [class*="css"] {
 }
 
 /* ── Remove Streamlit chrome ────────────────────── */
-#MainMenu, footer, header { visibility: hidden; }
+footer { visibility: hidden; }
 .block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
 
 /* ── Tabs ───────────────────────────────────────── */

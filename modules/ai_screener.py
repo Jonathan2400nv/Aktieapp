@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from services.screener_service import fetch_screener_data
-from services.ai_screener_service import get_garp_analysis
+from services.ai_screener_service import get_stock_analysis
 
 
 def _fmt(val, suffix="", decimals=1, scale=1):
@@ -23,20 +23,9 @@ def _market_cap_str(val):
     return f"${val/1e6:.0f}M"
 
 
-def _recommendation_color(text: str) -> str:
-    if not text:
-        return "gray"
-    t = text.upper()
-    if "BUY" in t:
-        return "green"
-    if "SELL" in t:
-        return "red"
-    return "orange"
-
-
 def render(watchlist: list[str]) -> None:
-    st.header("AI Stock Screener")
-    st.caption("GARP-analyse (Growth at a Reasonable Price) — Buy/Hold/Sell med begrundelse, DCF og stop-loss")
+    st.header("🔍 AI Stock Screener")
+    st.caption("Multi-framework analyse — aktie-klassificering, Fair Value interval og bull/bear case")
 
     if not watchlist:
         st.warning("Tilføj aktier til din watchlist i sidebaren.")
@@ -54,7 +43,7 @@ def render(watchlist: list[str]) -> None:
     with st.expander("Filtre", expanded=False):
         f_col1, f_col2 = st.columns(2)
         with f_col1:
-            filter_score = st.checkbox("Score ≥ 5 (KØB-kandidater)", value=False)
+            filter_score = st.checkbox("Momentum-score ≥ 5 (KØB-kandidater)", value=False)
             filter_adx = st.checkbox("ADX > 25 (aktier i reel trend)", value=False)
             filter_divergence = st.checkbox("Bullish RSI-divergens", value=False)
         with f_col2:
@@ -82,27 +71,23 @@ def render(watchlist: list[str]) -> None:
     st.subheader("Oversigt")
     rows = []
     for ticker, d in results.items():
-        mos = None
-        if d.get('dcf_fair_value') and d.get('current_price'):
-            mos = round((d['dcf_fair_value'] - d['current_price']) / d['current_price'] * 100, 1)
         rows.append({
             "Ticker": ticker,
-            "Navn": d.get('name', ticker)[:30],
+            "Navn": d.get('name', ticker)[:28],
             "Sektor": d.get('sector', '—'),
             "Kurs": _fmt(d.get('current_price'), '$', 2),
             "P/E": _fmt(d.get('pe'), '', 1),
-            "Fwd P/E": _fmt(d.get('fwd_pe'), '', 1),
-            "P/S": _fmt(d.get('ps'), 'x', 1),
+            "EV/EBITDA": _fmt(d.get('ev_ebitda'), 'x', 1),
+            "P/FCF": _fmt(d.get('price_to_fcf'), 'x', 1),
             "ROE": _fmt(d.get('roe'), '%', 1, 100),
+            "Bruttomargin": _fmt(d.get('gross_margin'), '%', 1, 100),
             "Rev. vækst": _fmt(d.get('rev_growth'), '%', 1, 100),
-            "DCF Fair Value": _fmt(d.get('dcf_fair_value'), '$', 2),
-            "Margin of Safety": f"{mos}%" if mos is not None else "—",
-            "RSI": _fmt(d.get('rsi'), '', 1),
-            "Stop-loss": _fmt(d.get('stop_loss'), '$', 2),
-            "Market Cap": _market_cap_str(d.get('market_cap')),
-            "Score": d.get('signal_score', '—'),
+            "DCF Base": _fmt(d.get('dcf_fair_value'), '$', 2),
+            "Analytiker mål": _fmt(d.get('analyst_target'), '$', 2),
+            "Momentum": f"{d.get('signal_score', '—')}/7",
             "Signal": d.get('signal_label', '—'),
             "R:R": _fmt(d.get('rr'), '', 2),
+            "Market Cap": _market_cap_str(d.get('market_cap')),
         })
 
     if filter_score:
@@ -122,35 +107,31 @@ def render(watchlist: list[str]) -> None:
     st.subheader("AI-analyse per aktie")
 
     for ticker, d in results.items():
-        with st.expander(f"**{ticker}** — {d.get('name', '')} ({d.get('sector', '—')})", expanded=True):
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Kurs", _fmt(d.get('current_price'), '$', 2))
-            col2.metric("DCF Fair Value", _fmt(d.get('dcf_fair_value'), '$', 2))
-
-            mos = None
-            if d.get('dcf_fair_value') and d.get('current_price'):
-                mos = round((d['dcf_fair_value'] - d['current_price']) / d['current_price'] * 100, 1)
-            col3.metric("Margin of Safety", f"{mos}%" if mos is not None else "—",
-                        delta=f"{mos}%" if mos is not None else None)
-            col4.metric("Stop-loss (2×ATR)", _fmt(d.get('stop_loss'), '$', 2))
-
+        with st.expander(f"**{ticker}** — {d.get('name', '')} · {d.get('sector', '—')}", expanded=True):
+            # Metrics row 1: valuation
             c1, c2, c3, c4, c5 = st.columns(5)
-            c1.metric("P/E", _fmt(d.get('pe'), '', 1))
-            c2.metric("Fwd P/E", _fmt(d.get('fwd_pe'), '', 1))
-            c3.metric("P/S", _fmt(d.get('ps'), 'x', 1))
-            c4.metric("ROE", _fmt(d.get('roe'), '%', 1, 100))
-            c5.metric("Rev. vækst", _fmt(d.get('rev_growth'), '%', 1, 100))
+            c1.metric("Kurs", _fmt(d.get('current_price'), '$', 2))
+            c2.metric("DCF Bear / Base / Bull",
+                      f"{_fmt(d.get('dcf_bear'), '$', 0)} – {_fmt(d.get('dcf_fair_value'), '$', 0)} – {_fmt(d.get('dcf_bull'), '$', 0)}")
+            c3.metric("Analytiker mål", _fmt(d.get('analyst_target'), '$', 2),
+                      f"{d.get('analyst_count', '—')} analytikere")
+            c4.metric("EV/EBITDA", _fmt(d.get('ev_ebitda'), 'x', 1))
+            c5.metric("P/FCF", _fmt(d.get('price_to_fcf'), 'x', 1))
+
+            # Metrics row 2: quality
+            q1, q2, q3, q4, q5 = st.columns(5)
+            q1.metric("ROE", _fmt(d.get('roe'), '%', 1, 100))
+            q2.metric("Bruttomargin", _fmt(d.get('gross_margin'), '%', 1, 100))
+            q3.metric("FCF-konv.", _fmt(d.get('fcf_conversion'), 'x', 2))
+            q4.metric("Gæld/EBITDA", _fmt(d.get('debt_ebitda'), 'x', 1))
+            q5.metric("Momentum", f"{d.get('signal_score', '—')}/7 — {d.get('signal_label', '—')}")
+
+            st.divider()
 
             with st.spinner(f"Claude analyserer {ticker}..."):
-                analysis = get_garp_analysis(d)
+                analysis = get_stock_analysis(d)
 
             if analysis:
-                first_line = analysis.split('\n')[0].upper()
-                if "BUY" in first_line:
-                    st.success(analysis)
-                elif "SELL" in first_line:
-                    st.error(analysis)
-                else:
-                    st.warning(analysis)
+                st.markdown(analysis)
             else:
-                st.caption("AI-analyse ikke tilgængelig — tjek ANTHROPIC_API_KEY.")
+                st.caption("AI-analyse ikke tilgængelig — tjek at ANTHROPIC_API_KEY er konfigureret.")

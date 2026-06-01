@@ -40,28 +40,24 @@ def render_watchlist_sidebar() -> list[str]:
         st.session_state.watchlist = load_watchlist()
 
     with st.sidebar:
-        st.markdown("### 📋 Watchlist")
-        st.markdown("---")
+        st.markdown("### Watchlist")
 
         wl = st.session_state.watchlist
         if wl:
-            cols_per_row = 2
-            for i in range(0, len(wl), cols_per_row):
-                row_tickers = wl[i:i + cols_per_row]
-                cols = st.columns([3, 1] * len(row_tickers))
-                for j, ticker in enumerate(row_tickers):
-                    cols[j * 2].markdown(
-                        f'<div style="padding:5px 0;font-size:13px;font-weight:500">{ticker}</div>',
-                        unsafe_allow_html=True,
-                    )
-                    if cols[j * 2 + 1].button("✕", key=f"rm_{ticker}", help=f"Fjern {ticker}"):
-                        st.session_state.watchlist = [t for t in wl if t != ticker]
-                        save_watchlist(st.session_state.watchlist)
-                        st.rerun()
+            for ticker in wl:
+                col_name, col_btn = st.columns([5, 1])
+                col_name.markdown(
+                    f'<div style="line-height:2;font-size:13px;font-weight:500">{ticker}</div>',
+                    unsafe_allow_html=True,
+                )
+                if col_btn.button("✕", key=f"rm_{ticker}", help=f"Fjern {ticker}"):
+                    st.session_state.watchlist = [t for t in wl if t != ticker]
+                    save_watchlist(st.session_state.watchlist)
+                    st.rerun()
         else:
             st.caption("Ingen aktier endnu.")
 
-        st.markdown("---")
+        st.divider()
 
         new = st.text_input(
             "Tilføj ticker",
