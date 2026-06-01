@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
     steps:
       - name: Checkout kode
         uses: actions/checkout@v4
@@ -24,7 +27,7 @@ jobs:
       - name: Installer afhængigheder
         run: |
           pip install --upgrade pip
-          pip install yfinance pandas requests numpy python-dotenv
+          pip install yfinance pandas requests numpy python-dotenv lxml beautifulsoup4
 
       - name: Kør daglig scan
         env:
