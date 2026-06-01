@@ -8,8 +8,8 @@ _WATCHLIST_PATH = "watchlist.json"
 
 
 def parse_tickers(text: str) -> list[str]:
-    parts = re.split(r"[,\n]+", text)
-    return [p.strip().upper() for p in parts if p.strip()]
+    parts = re.split(r"[,\n\s]+", text)
+    return [p.strip().upper() for p in parts if p.strip() and re.match(r'^[A-Z0-9.\-]{1,10}$', p.strip().upper())]
 
 
 def format_tickers(tickers: list[str]) -> str:
@@ -22,7 +22,7 @@ def load_watchlist(path: str = _WATCHLIST_PATH) -> list[str]:
             data = json.load(f)
         if isinstance(data, list) and data:
             return data
-    except (FileNotFoundError, json.JSONDecodeError, Exception):
+    except Exception:
         pass
     return list(_DEFAULT_WATCHLIST)
 
@@ -39,27 +39,51 @@ def render_watchlist_sidebar() -> list[str]:
     if "watchlist" not in st.session_state:
         st.session_state.watchlist = load_watchlist()
 
-    st.sidebar.header("Watchlist")
-    text = st.sidebar.text_area(
-        "Aktier (én per linje eller kommasepareret)",
-        value=format_tickers(st.session_state.watchlist),
-        height=200,
-        key="watchlist_input",
-    )
+    with st.sidebar:
+        st.markdown("### 📋 Watchlist")
+        st.markdown("---")
 
-    if st.sidebar.button("Gem watchlist"):
-        tickers = parse_tickers(text)
-        if tickers:
-            st.session_state.watchlist = tickers
-            save_watchlist(tickers)
-            st.sidebar.success(f"{len(tickers)} aktier gemt.")
+        wl = st.session_state.watchlist
+        if wl:
+            cols_per_row = 2
+            for i in range(0, len(wl), cols_per_row):
+                row_tickers = wl[i:i + cols_per_row]
+                cols = st.columns([3, 1] * len(row_tickers))
+                for j, ticker in enumerate(row_tickers):
+                    cols[j * 2].markdown(
+                        f'<div style="padding:5px 0;font-size:13px;font-weight:500">{ticker}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if cols[j * 2 + 1].button("✕", key=f"rm_{ticker}", help=f"Fjern {ticker}"):
+                        st.session_state.watchlist = [t for t in wl if t != ticker]
+                        save_watchlist(st.session_state.watchlist)
+                        st.rerun()
         else:
-            st.sidebar.warning("Ingen gyldige tickers fundet.")
+            st.caption("Ingen aktier endnu.")
 
-    if not os.access(".", os.W_OK):
-        st.sidebar.caption(
-            "Streamlit Cloud: Watchlist nulstilles ved reload. "
-            "Hardkod din liste i `_DEFAULT_WATCHLIST` for permanent gemmelse."
+        st.markdown("---")
+
+        new = st.text_input(
+            "Tilføj ticker",
+            placeholder="f.eks. AAPL, NOVO-B.CO",
+            key="new_ticker_input",
+            label_visibility="collapsed",
         )
+        if st.button("＋ Tilføj", use_container_width=True, type="primary"):
+            tickers = parse_tickers(new)
+            if tickers:
+                existing = set(st.session_state.watchlist)
+                added = [t for t in tickers if t not in existing]
+                if added:
+                    st.session_state.watchlist = st.session_state.watchlist + added
+                    save_watchlist(st.session_state.watchlist)
+                    st.rerun()
+                else:
+                    st.warning("Allerede på listen.")
+            else:
+                st.warning("Ugyldig ticker.")
+
+        if not os.access(".", os.W_OK):
+            st.caption("⚠️ Watchlist nulstilles ved reload på Streamlit Cloud.")
 
     return st.session_state.watchlist
