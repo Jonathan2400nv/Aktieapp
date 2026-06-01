@@ -31,13 +31,26 @@ def fetch_ohlcv(ticker: str, period: str = "6mo") -> pd.DataFrame | None:
     return None
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=1800)
 def fetch_earnings_for_ticker(ticker: str) -> dict | None:
     try:
         t = yf.Ticker(ticker)
-        info = t.info or {}
-        name = info.get('longName', ticker)
 
+        # Get name — try fast_info first (no heavy API call), fall back to info
+        name = ticker
+        try:
+            fi = t.fast_info
+            name = getattr(fi, 'company_name', None) or ticker
+        except Exception:
+            pass
+        if name == ticker:
+            try:
+                info = t.info or {}
+                name = info.get('longName', ticker)
+            except Exception:
+                pass
+
+        # Get earnings date
         earnings_date = None
         try:
             cal = t.calendar

@@ -1,3 +1,4 @@
+import html
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
@@ -9,7 +10,7 @@ def _days_label(date, now) -> tuple[str, str]:
         d = pd.Timestamp(date).date()
         delta = (d - now.date()).days
         if delta < 0:
-            return f"for {abs(delta)}d siden", "#888"
+            return f"for {abs(delta)}d siden", "#666"
         if delta == 0:
             return "I dag 🔔", "#f44336"
         if delta <= 7:
@@ -19,6 +20,30 @@ def _days_label(date, now) -> tuple[str, str]:
         return f"{d.strftime('%d. %b %Y')}", "#888"
     except Exception:
         return "Ukendt", "#888"
+
+
+def _card(row, now) -> str:
+    label, color = _days_label(row["Earnings Dato"], now)
+    try:
+        date_str = pd.Timestamp(row["Earnings Dato"]).strftime("%d. %b %Y")
+    except Exception:
+        date_str = "—"
+    ticker = html.escape(str(row["Ticker"]))
+    name = html.escape(str(row["Navn"]))
+    return (
+        f'<div style="display:flex;align-items:center;justify-content:space-between;'
+        f'padding:12px 16px;border-radius:10px;border:1px solid rgba(128,128,128,0.15);'
+        f'margin-bottom:8px">'
+        f'<div>'
+        f'<span style="font-weight:600;font-size:15px">{ticker}</span>'
+        f'<span style="color:#888;font-size:12px;margin-left:8px">{name}</span>'
+        f'</div>'
+        f'<div style="text-align:right">'
+        f'<div style="font-size:12px;color:#888">{date_str}</div>'
+        f'<div style="font-size:11px;font-weight:500;color:{color}">{label}</div>'
+        f'</div>'
+        f'</div>'
+    )
 
 
 def render(watchlist: list[str]) -> None:
@@ -34,7 +59,7 @@ def render(watchlist: list[str]) -> None:
         rows = [r for r in rows if r is not None]
 
     if not rows:
-        st.warning("Ingen earnings-data tilgængelig for din watchlist.")
+        st.warning("Ingen earnings-data tilgængelig — prøv at klikke 'Genindlæs data' i sidebaren.")
         return
 
     df = pd.DataFrame(rows)
@@ -45,51 +70,34 @@ def render(watchlist: list[str]) -> None:
     soon_cutoff = now + timedelta(days=7)
 
     soon = []
-    later = []
+    upcoming = []
+    past = []
     unknown = []
 
     for _, row in df.iterrows():
         try:
             d = pd.Timestamp(row["Earnings Dato"]).date()
             if d < now.date():
-                later.append(row)
+                past.append(row)
             elif d <= soon_cutoff.date():
                 soon.append(row)
             else:
-                later.append(row)
+                upcoming.append(row)
         except Exception:
             unknown.append(row)
 
-    def _card(row):
-        label, color = _days_label(row["Earnings Dato"], now)
-        try:
-            date_str = pd.Timestamp(row["Earnings Dato"]).strftime("%d. %b %Y")
-        except Exception:
-            date_str = "—"
-        return (
-            f'<div style="display:flex;align-items:center;justify-content:space-between;'
-            f'padding:12px 16px;border-radius:10px;border:1px solid rgba(128,128,128,0.15);'
-            f'margin-bottom:8px">'
-            f'<div>'
-            f'<span style="font-weight:600;font-size:15px">{row["Ticker"]}</span>'
-            f'<span style="color:#888;font-size:12px;margin-left:8px">{row["Navn"]}</span>'
-            f'</div>'
-            f'<div style="text-align:right">'
-            f'<div style="font-size:12px;color:#888">{date_str}</div>'
-            f'<div style="font-size:11px;font-weight:500;color:{color}">{label}</div>'
-            f'</div>'
-            f'</div>'
-        )
-
     if soon:
         st.markdown("#### ⚡ Inden for 7 dage")
-        st.markdown("".join(_card(r) for r in soon), unsafe_allow_html=True)
-        st.markdown("")
+        st.markdown("".join(_card(r, now) for r in soon), unsafe_allow_html=True)
 
-    if later:
+    if upcoming:
         st.markdown("#### 📆 Kommende")
-        st.markdown("".join(_card(r) for r in later), unsafe_allow_html=True)
+        st.markdown("".join(_card(r, now) for r in upcoming), unsafe_allow_html=True)
+
+    if past:
+        st.markdown("#### 🕐 Senest rapporteret")
+        st.markdown("".join(_card(r, now) for r in past), unsafe_allow_html=True)
 
     if unknown:
         st.markdown("#### ❓ Dato ukendt")
-        st.markdown("".join(_card(r) for r in unknown), unsafe_allow_html=True)
+        st.markdown("".join(_card(r, now) for r in unknown), unsafe_allow_html=True)
