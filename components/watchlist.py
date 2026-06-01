@@ -16,9 +16,39 @@ def format_tickers(tickers: list[str]) -> str:
     return "\n".join(tickers)
 
 
-def load_watchlist(path: str = _WATCHLIST_PATH) -> list[str]:
+def _load_from_supabase() -> list[str] | None:
     try:
-        with open(path) as f:
+        from services.supabase_client import load_from_supabase, _credentials
+        if not _credentials():
+            return None
+        data = load_from_supabase()
+        if data and isinstance(data.get("watchlist"), list) and data["watchlist"]:
+            return data["watchlist"]
+    except Exception:
+        pass
+    return None
+
+
+def _save_to_supabase(tickers: list[str]) -> None:
+    try:
+        from services.supabase_client import load_from_supabase, save_to_supabase, _credentials
+        if not _credentials():
+            return
+        data = load_from_supabase() or {}
+        data["watchlist"] = tickers
+        save_to_supabase(data)
+    except Exception:
+        pass
+
+
+def load_watchlist() -> list[str]:
+    # 1. Try Supabase (persists across redeploys)
+    from_db = _load_from_supabase()
+    if from_db is not None:
+        return from_db
+    # 2. Try local file (works in dev)
+    try:
+        with open(_WATCHLIST_PATH) as f:
             data = json.load(f)
         if isinstance(data, list) and data:
             return data
@@ -28,6 +58,7 @@ def load_watchlist(path: str = _WATCHLIST_PATH) -> list[str]:
 
 
 def save_watchlist(tickers: list[str], path: str = _WATCHLIST_PATH) -> None:
+    _save_to_supabase(tickers)
     try:
         with open(path, "w") as f:
             json.dump(tickers, f)
