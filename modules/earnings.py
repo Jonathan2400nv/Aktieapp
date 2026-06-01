@@ -30,10 +30,12 @@ def _card(row, now) -> str:
         date_str = "—"
     ticker = html.escape(str(row["Ticker"]))
     name = html.escape(str(row["Navn"]))
+    yf_url = f"https://finance.yahoo.com/quote/{row['Ticker']}/financials/"
     return (
+        f'<a href="{yf_url}" target="_blank" style="text-decoration:none;color:inherit">'
         f'<div style="display:flex;align-items:center;justify-content:space-between;'
         f'padding:12px 16px;border-radius:10px;border:1px solid rgba(128,128,128,0.15);'
-        f'margin-bottom:8px">'
+        f'margin-bottom:8px;cursor:pointer">'
         f'<div>'
         f'<span style="font-weight:600;font-size:15px">{ticker}</span>'
         f'<span style="color:#888;font-size:12px;margin-left:8px">{name}</span>'
@@ -43,6 +45,7 @@ def _card(row, now) -> str:
         f'<div style="font-size:11px;font-weight:500;color:{color}">{label}</div>'
         f'</div>'
         f'</div>'
+        f'</a>'
     )
 
 
