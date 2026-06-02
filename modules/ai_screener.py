@@ -120,8 +120,9 @@ def render(watchlist: list[str]) -> None:
             c1.metric("Kurs", _fmt(d.get('current_price'), '$', 2))
             c2.metric("DCF Bear / Base / Bull",
                       f"{_fmt(d.get('dcf_bear'), '$', 0)} – {_fmt(d.get('dcf_fair_value'), '$', 0)} – {_fmt(d.get('dcf_bull'), '$', 0)}")
-            c3.metric("Analytiker mål", _fmt(d.get('analyst_target'), '$', 2),
-                      f"{d.get('analyst_count', '—')} analytikere")
+            analyst_count = d.get('analyst_count')
+            analyst_delta = f"{analyst_count} analytikere" if analyst_count is not None else None
+            c3.metric("Analytiker mål", _fmt(d.get('analyst_target'), '$', 2), analyst_delta)
             c4.metric("EV/EBITDA", _fmt(d.get('ev_ebitda'), 'x', 1))
             c5.metric("P/FCF", _fmt(d.get('price_to_fcf'), 'x', 1))
 
