@@ -185,11 +185,54 @@ def full_scan(universe: list[str], portfolio: dict) -> list[dict]:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def _fetch_universe() -> list[str]:
+    """Fetch ticker universe directly — no streamlit dependency."""
+    tickers: set[str] = set()
+
+    sources_us = [
+        ("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies", 0, "Symbol", ""),
+        ("https://en.wikipedia.org/wiki/Nasdaq-100", 4, "Ticker", ""),
+    ]
+    for url, idx, col, suffix in sources_us:
+        try:
+            tables = pd.read_html(url)
+            for t in tables:
+                if col in t.columns:
+                    for v in t[col].dropna().astype(str):
+                        v = v.strip().replace(".", "-")
+                        if v:
+                            tickers.add(v + suffix)
+                    break
+        except Exception:
+            pass
+
+    europe = [
+        ("https://en.wikipedia.org/wiki/DAX", "Ticker", ".DE"),
+        ("https://en.wikipedia.org/wiki/CAC_40", "Ticker", ".PA"),
+        ("https://en.wikipedia.org/wiki/FTSE_100_Index", "EPIC", ".L"),
+        ("https://en.wikipedia.org/wiki/EURO_STOXX_50", "Ticker", ""),
+        ("https://en.wikipedia.org/wiki/OMX_Copenhagen_25", "Ticker", ".CO"),
+    ]
+    for url, col, suffix in europe:
+        try:
+            tables = pd.read_html(url)
+            for t in tables:
+                if col in t.columns:
+                    for v in t[col].dropna().astype(str):
+                        v = v.strip()
+                        if v and len(v) <= 12 and v.lower() not in (col.lower(), "ticker", "symbol", "epic"):
+                            tickers.add(v if "." in v else v + suffix)
+                    break
+        except Exception:
+            pass
+
+    return sorted(tickers)
+
+
 def main():
     log.info("=== Daglig portefølje-scan starter ===")
 
-    from services.market_universe import get_us_tickers, get_european_tickers
-    universe = sorted(set(get_us_tickers() + get_european_tickers()))
+    universe = _fetch_universe()
     log.info(f"Univers: {len(universe)} tickers")
 
     portfolio = load_portfolio()
