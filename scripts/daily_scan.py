@@ -185,17 +185,52 @@ def full_scan(universe: list[str], portfolio: dict) -> list[dict]:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+_FALLBACK_UNIVERSE = [
+    # S&P 500 large caps
+    "AAPL","MSFT","NVDA","AMZN","GOOGL","GOOG","META","TSLA","BRK-B","AVGO",
+    "JPM","LLY","V","UNH","XOM","MA","COST","HD","PG","JNJ","ABBV","BAC","MRK",
+    "CRM","CVX","ORCL","ACN","MCD","NFLX","AMD","LIN","TMO","PEP","ABT","TXN",
+    "WMT","ADBE","QCOM","DHR","PM","AMGN","IBM","GE","RTX","INTU","CAT","SPGI",
+    "VZ","ISRG","BKNG","T","GS","BLK","AMAT","SYK","HON","AXP","ELV","MDT",
+    "TJX","PLD","GILD","DE","VRTX","REGN","C","MS","NOW","PGR","ADI","LRCX",
+    "MU","MMC","ETN","UNP","CME","EOG","KLAC","ZTS","BSX","PANW","PH","SLB",
+    "SO","WM","MCO","APH","AON","SNPS","CDNS","MSI","ITW","EMR","GD","NOC",
+    "HCA","EW","COF","TGT","DUK","OKE","USB","F","GM","ABNB","UBER","LYFT",
+    "SHOP","SQ","PYPL","COIN","HOOD","RBLX","SNAP","PINS","SPOT","DKNG",
+    # NASDAQ extras
+    "ASML","TSM","MRVL","NXPI","ON","SMCI","ARM","MPWR","ENPH","FSLR",
+    # DAX
+    "SAP.DE","SIE.DE","ALV.DE","DTE.DE","MRK.DE","MUV2.DE","BMW.DE","VOW3.DE",
+    "BAS.DE","BAYN.DE","ADS.DE","AIR.DE","DBK.DE","RWE.DE","BEI.DE","HEN3.DE",
+    "IFX.DE","MTX.DE","EOAN.DE","FRE.DE","HEI.DE","VNA.DE","CON.DE","ZAL.DE",
+    # CAC 40
+    "MC.PA","OR.PA","TTE.PA","SAN.PA","AIR.PA","BNP.PA","DG.PA","RI.PA",
+    "KER.PA","CS.PA","SU.PA","ACA.PA","GLE.PA","STLA.PA","CAP.PA","HO.PA",
+    "LR.PA","ORA.PA","SGO.PA","EN.PA","VIE.PA","RMS.PA","EL.PA","BN.PA",
+    # FTSE 100
+    "SHEL.L","AZN.L","HSBA.L","ULVR.L","BP.L","RIO.L","GSK.L","LSEG.L",
+    "REL.L","NG.L","VOD.L","LLOY.L","BARC.L","PRU.L","AAL.L","BT-A.L",
+    # EURO STOXX extras
+    "ASML.AS","PHIA.AS","UNA.AS","ING.AS","ABN.AS",
+    "ENEL.MI","ENI.MI","ISP.MI","UCG.MI","STM.MI",
+    "SAN.MC","BBVA.MC","IBE.MC","ITX.MC",
+    # C25
+    "NOVO-B.CO","DSV.CO","ORSTED.CO","COLO-B.CO","CARL-B.CO",
+    "DEMANT.CO","GN.CO","RBREW.CO","MAERSK-B.CO","VWS.CO",
+]
+
+
 def _fetch_universe() -> list[str]:
-    """Fetch ticker universe directly — no streamlit dependency."""
+    """Fetch ticker universe from Wikipedia, fall back to hardcoded list."""
     tickers: set[str] = set()
 
     sources_us = [
-        ("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies", 0, "Symbol", ""),
-        ("https://en.wikipedia.org/wiki/Nasdaq-100", 4, "Ticker", ""),
+        ("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies", "Symbol", ""),
+        ("https://en.wikipedia.org/wiki/Nasdaq-100", "Ticker", ""),
     ]
-    for url, idx, col, suffix in sources_us:
+    for url, col, suffix in sources_us:
         try:
-            tables = pd.read_html(url)
+            tables = pd.read_html(url, flavor="lxml")
             for t in tables:
                 if col in t.columns:
                     for v in t[col].dropna().astype(str):
@@ -215,7 +250,7 @@ def _fetch_universe() -> list[str]:
     ]
     for url, col, suffix in europe:
         try:
-            tables = pd.read_html(url)
+            tables = pd.read_html(url, flavor="lxml")
             for t in tables:
                 if col in t.columns:
                     for v in t[col].dropna().astype(str):
@@ -225,6 +260,10 @@ def _fetch_universe() -> list[str]:
                     break
         except Exception:
             pass
+
+    if len(tickers) < 50:
+        log.warning(f"Wikipedia hentede kun {len(tickers)} tickers — bruger hardcoded fallback")
+        tickers.update(_FALLBACK_UNIVERSE)
 
     return sorted(tickers)
 
